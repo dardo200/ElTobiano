@@ -289,5 +289,3 @@ Licencia
 Este proyecto está bajo la licencia MIT. Consulta el archivo LICENSE para más detalles.
 
 ¡Gracias por usar este sistema de gestión de comercio! Si tienes alguna pregunta, no dudes en contactarnos.
-
-sdf
