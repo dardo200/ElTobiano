@@ -1,0 +1,295 @@
+import { executeQuery } from "./db"
+import type { Producto } from "@/types"
+
+export async function obtenerProductos(): Promise<Producto[]> {
+  try {
+    const result = await executeQuery(`
+      SELECT p.*, COALESCE(s.cantidad, 0) as stock 
+      FROM Productos p 
+      LEFT JOIN Stock s ON p.id = s.id_producto
+      ORDER BY p.nombre
+    `)
+    return result.rows
+  } catch (error) {
+    console.error("Error al obtener productos:", error)
+    throw error
+  }
+}
+
+export async function obtenerProductoPorId(id: number): Promise<Producto | null> {
+  try {
+    const result = await executeQuery(
+      `
+      SELECT p.*, COALESCE(s.cantidad, 0) as stock 
+      FROM Productos p 
+      LEFT JOIN Stock s ON p.id = s.id_producto
+      WHERE p.id = $1
+    `,
+      [id],
+    )
+
+    if (result.rows.length === 0) {
+      return null
+    }
+
+    return result.rows[0]
+  } catch (error) {
+    console.error(`Error al obtener producto con id ${id}:`, error)
+    throw error
+  }
+}
+
+export async function obtenerProductoPorCodigo(codigo: string): Promise<Producto | null> {
+  try {
+    const result = await executeQuery(
+      `
+      SELECT p.*, COALESCE(s.cantidad, 0) as stock 
+      FROM Productos p 
+      LEFT JOIN Stock s ON p.id = s.id_producto
+      WHERE p.codigo = $1
+    `,
+      [codigo],
+    )
+
+    if (result.rows.length === 0) {
+      return null
+    }
+
+    return result.rows[0]
+  } catch (error) {
+    console.error(`Error al obtener producto con código ${codigo}:`, error)
+    throw error
+  }
+}
+
+export async function crearProducto(producto: Omit<Producto, "id">): Promise<Producto> {
+  try {
+    const client = await import("./db").then((module) => module.getClient())
+    
+
+    try {
+      await client.query("BEGIN")
+
+      // Verificar si el código ya existe
+      if (producto.codigo) {
+        const checkResult = await client.query("SELECT id FROM Productos WHERE codigo = $1", [producto.codigo])
+        if (checkResult.rows.length > 0) {
+          throw new Error(`Ya existe un producto con el código de barras ${producto.codigo}`)
+        }
+      } else {
+        throw new Error("El código de barras es obligatorio")
+      }
+
+      // Insertar producto usando el código como ID
+      const resultProducto = await client.query(
+        "INSERT INTO Productos (nombre, descripcion, precio, codigo) VALUES ($1, $2, $3, $4) RETURNING *",
+        [producto.nombre, producto.descripcion, producto.precio, producto.codigo],
+      )
+
+      const nuevoProducto = resultProducto.rows[0]
+
+      // Insertar stock inicial
+      await client.query("INSERT INTO Stock (id_producto, cantidad) VALUES ($1, $2)", [
+        nuevoProducto.id,
+        producto.stock || 0,
+      ])
+
+      await client.query("COMMIT")
+
+      return { ...nuevoProducto, stock: producto.stock || 0 }
+    } catch (error) {
+      await client.query("ROLLBACK")
+      throw error
+    } finally {
+      await client.end()
+    }
+  } catch (error) {
+    console.error("Error al crear producto:", error)
+    throw error
+  }
+}
+
+export async function actualizarProducto(id: number, producto: Partial<Producto>): Promise<Producto | null> {
+  try {
+    const client = await import("./db").then((module) => module.getClient())
+    
+
+    try {
+      await client.query("BEGIN")
+
+      // Verificar si el código ya existe en otro producto
+      if (producto.codigo) {
+        const checkResult = await client.query("SELECT id FROM Productos WHERE codigo = $1 AND id != $2", [
+          producto.codigo,
+          id,
+        ])
+        if (checkResult.rows.length > 0) {
+          throw new Error(`Ya existe otro producto con el código de barras ${producto.codigo}`)
+        }
+      }
+
+      // Actualizar producto
+      const updateFields = []
+      const updateValues = []
+      let paramIndex = 1
+
+      if (producto.nombre !== undefined) {
+        updateFields.push(`nombre = $${paramIndex}`)
+        updateValues.push(producto.nombre)
+        paramIndex++
+      }
+
+      if (producto.descripcion !== undefined) {
+        updateFields.push(`descripcion = $${paramIndex}`)
+        updateValues.push(producto.descripcion)
+        paramIndex++
+      }
+
+      if (producto.precio !== undefined) {
+        updateFields.push(`precio = $${paramIndex}`)
+        updateValues.push(producto.precio)
+        paramIndex++
+      }
+
+      if (producto.codigo !== undefined) {
+        updateFields.push(`codigo = $${paramIndex}`)
+        updateValues.push(producto.codigo)
+        paramIndex++
+      }
+
+      if (updateFields.length === 0) {
+        return null
+      }
+
+      updateValues.push(id)
+
+      const resultProducto = await client.query(
+        `UPDATE Productos SET ${updateFields.join(", ")} WHERE id = $${paramIndex} RETURNING *`,
+        updateValues,
+      )
+
+      if (resultProducto.rows.length === 0) {
+        await client.query("ROLLBACK")
+        return null
+      }
+
+      // Actualizar stock si se proporciona
+      if (producto.stock !== undefined) {
+        await client.query(
+          "INSERT INTO Stock (id_producto, cantidad) VALUES ($1, $2) ON CONFLICT (id_producto) DO UPDATE SET cantidad = $2",
+          [id, producto.stock],
+        )
+      }
+
+      await client.query("COMMIT")
+
+      // Obtener el producto actualizado con su stock
+      const productoActualizado = await obtenerProductoPorId(id)
+      return productoActualizado
+    } catch (error) {
+      await client.query("ROLLBACK")
+      throw error
+    } finally {
+      await client.end()
+    }
+  } catch (error) {
+    console.error(`Error al actualizar producto con id ${id}:`, error)
+    throw error
+  }
+}
+
+export async function eliminarProducto(id: number): Promise<boolean> {
+  try {
+    const result = await executeQuery("DELETE FROM Productos WHERE id = $1 RETURNING id", [id])
+    return result.rows.length > 0
+  } catch (error) {
+    console.error(`Error al eliminar producto con id ${id}:`, error)
+    throw error
+  }
+}
+
+export async function buscarProductos(termino: string): Promise<Producto[]> {
+  try {
+    const result = await executeQuery(
+      `
+      SELECT p.*, COALESCE(s.cantidad, 0) as stock 
+      FROM Productos p 
+      LEFT JOIN Stock s ON p.id = s.id_producto
+      WHERE p.nombre ILIKE $1 OR p.descripcion ILIKE $1 OR p.codigo = $2
+      ORDER BY p.nombre
+    `,
+      [`%${termino}%`, termino],
+    )
+
+    return result.rows
+  } catch (error) {
+    console.error(`Error al buscar productos con término "${termino}":`, error)
+    throw error
+  }
+}
+
+// Agregar esta función al final del archivo
+export async function contarProductosSinStock(): Promise<number> {
+  try {
+    const result = await executeQuery(
+      `
+      SELECT COUNT(*) as count
+      FROM Productos p
+      LEFT JOIN Stock s ON p.id = s.id_producto
+      WHERE s.cantidad = 0 OR s.cantidad IS NULL
+    `,
+    )
+    return Number.parseInt(result.rows[0].count)
+  } catch (error) {
+    console.error("Error al contar productos sin stock:", error)
+    throw error
+  }
+}
+
+// Agregar esta función al final del archivo
+export async function obtenerProductosStockBajo(limite: number): Promise<Producto[]> {
+  try {
+    const result = await executeQuery(
+      `
+      SELECT p.*, COALESCE(s.cantidad, 0) as stock 
+      FROM Productos p 
+      LEFT JOIN Stock s ON p.id = s.id_producto
+      WHERE COALESCE(s.cantidad, 0) < $1
+      ORDER BY COALESCE(s.cantidad, 0) ASC
+    `,
+      [limite],
+    )
+    return result.rows
+  } catch (error) {
+    console.error(`Error al obtener productos con stock bajo:`, error)
+    throw error
+  }
+}
+
+// Agregar esta función al archivo existente
+
+export async function verificarCodigoExiste(codigo: string): Promise<boolean> {
+  try {
+    const result = await executeQuery(
+      `
+      SELECT COUNT(*) as count
+      FROM Productos
+      WHERE codigo = $1
+      UNION ALL
+      SELECT COUNT(*) as count
+      FROM Combos
+      WHERE codigo = $1
+      `,
+      [codigo],
+    )
+
+    // Sumar los resultados de ambas consultas
+    const totalCount = result.rows.reduce((sum, row) => sum + Number.parseInt(row.count), 0)
+
+    return totalCount > 0
+  } catch (error) {
+    console.error(`Error al verificar si el código ${codigo} existe:`, error)
+    throw error
+  }
+}
+
