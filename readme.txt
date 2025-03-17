@@ -80,6 +80,11 @@ Ejecutar el proyecto:
 
 
 npm run dev
+
+npm run build (prod)
+y luego 
+npm start
+
 3. Scripts de Base de Datos
 Creación de Tablas
 Ejecuta el siguiente script SQL en tu base de datos para crear las tablas e índices:
