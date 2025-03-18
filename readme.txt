@@ -89,6 +89,8 @@ DATABASE_URL: Usar la cadena de conexión de Neon.
 
 DATABASE_SSL: true
 
+JWT_SECRET: ElTobiano
+
 2. Ejecución del Proyecto
 Clonar el repositorio:
 

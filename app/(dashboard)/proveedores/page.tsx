@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -18,27 +18,46 @@ export default function ProveedoresPage() {
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    const fetchProveedores = async () => {
-      try {
-        const response = await fetch("/api/proveedores")
-        if (response.ok) {
-          const data = await response.json()
-          setProveedores(data)
-        } else {
-          console.error("Error al obtener proveedores")
-          toast.error("No se pudieron cargar los proveedores")
-        }
-      } catch (error) {
-        console.error("Error al obtener proveedores:", error)
-        toast.error("Error al cargar los proveedores")
-      } finally {
-        setIsLoading(false)
+  const fetchProveedores = useCallback(async () => {
+    try {
+      const response = await fetch("/api/proveedores")
+      if (response.ok) {
+        const data = await response.json()
+        setProveedores(data)
+      } else {
+        console.error("Error al obtener proveedores")
+        toast.error("No se pudieron cargar los proveedores")
       }
+    } catch (error) {
+      console.error("Error al obtener proveedores:", error)
+      toast.error("Error al cargar los proveedores")
+    } finally {
+      setIsLoading(false)
     }
-
-    fetchProveedores()
   }, [])
+
+  useEffect(() => {
+    fetchProveedores()
+  }, [fetchProveedores])
+
+  // Función para eliminar un proveedor y actualizar la lista
+  const handleDeleteProveedor = async (id: number) => {
+    try {
+      const response = await fetch(`/api/proveedores/${id}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        // Actualizar el estado local eliminando el proveedor
+        setProveedores((prevProveedores) => prevProveedores.filter((proveedor) => proveedor.id !== id))
+        return true
+      }
+      return false
+    } catch (error) {
+      console.error("Error al eliminar el proveedor:", error)
+      return false
+    }
+  }
 
   return (
     <>
@@ -66,7 +85,13 @@ export default function ProveedoresPage() {
           ))}
         </div>
       ) : (
-        <DataTable columns={columns} data={proveedores} searchKey="nombre" searchPlaceholder="Buscar proveedores..." />
+        <DataTable
+          columns={columns}
+          data={proveedores}
+          searchKey="nombre"
+          searchPlaceholder="Buscar proveedores..."
+          deleteRow={handleDeleteProveedor}
+        />
       )}
     </>
   )

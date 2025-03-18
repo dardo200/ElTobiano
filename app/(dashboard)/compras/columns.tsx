@@ -71,21 +71,20 @@ export const columns: ColumnDef<Compra>[] = [
   {
     id: "acciones",
     header: "Acciones",
-    cell: ({ row }) => {
+    cell: ({ row, table }) => {
       const router = useRouter()
       const compra = row.original
+      const deleteRow = table.options.meta?.deleteRow
 
       const handleDelete = async (id: number) => {
         try {
-          const response = await fetch(`/api/compras/${id}`, {
-            method: "DELETE",
-          })
-
-          if (response.ok) {
-            toast.success("Compra eliminada correctamente")
-            window.location.reload()
-          } else {
-            toast.error("Error al eliminar la compra")
+          if (deleteRow) {
+            const success = await deleteRow(id)
+            if (success) {
+              toast.success("Compra eliminada correctamente")
+            } else {
+              toast.error("Error al eliminar la compra")
+            }
           }
         } catch (error) {
           console.error("Error al eliminar la compra:", error)

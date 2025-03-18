@@ -1,7 +1,7 @@
 "use client"
 
-import { ColumnDef } from "@tanstack/react-table"
-import { ArrowUpDown, MoreHorizontal, Edit, Trash } from 'lucide-react'
+import type { ColumnDef } from "@tanstack/react-table"
+import { ArrowUpDown, MoreHorizontal, Edit, Trash } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -15,7 +15,17 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { useRouter } from "next/navigation"
 import { toast } from "@/components/ui/use-toast"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { useState } from "react"
 import type { Producto } from "@/types"
 
@@ -24,10 +34,7 @@ export const columns: ColumnDef<Producto>[] = [
     id: "select",
     header: ({ table }) => (
       <Checkbox
-        checked={
-          table.getIsAllPageRowsSelected() ||
-          (table.getIsSomePageRowsSelected() && "indeterminate")
-        }
+        checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && "indeterminate")}
         onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
         aria-label="Select all"
       />
@@ -51,10 +58,7 @@ export const columns: ColumnDef<Producto>[] = [
     accessorKey: "nombre",
     header: ({ column }) => {
       return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
+        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
           Nombre
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
@@ -74,7 +78,7 @@ export const columns: ColumnDef<Producto>[] = [
     accessorKey: "precio",
     header: () => <div className="text-right">Precio</div>,
     cell: ({ row }) => {
-      const precio = parseFloat(row.getValue("precio"))
+      const precio = Number.parseFloat(row.getValue("precio"))
       const formatted = new Intl.NumberFormat("es-AR", {
         style: "currency",
         currency: "ARS",
@@ -87,8 +91,8 @@ export const columns: ColumnDef<Producto>[] = [
     accessorKey: "stock",
     header: () => <div className="text-center">Stock</div>,
     cell: ({ row }) => {
-      const stock = parseInt(row.getValue("stock") || "0")
-      
+      const stock = Number.parseInt(row.getValue("stock") || "0")
+
       // Determinar el color según el nivel de stock
       let badgeVariant = "default"
       if (stock <= 0) {
@@ -98,7 +102,7 @@ export const columns: ColumnDef<Producto>[] = [
       } else {
         badgeVariant = "success" // Verde para stock suficiente (4+)
       }
-      
+
       // Determinar el texto según el nivel de stock
       let stockText = `${stock} unidades`
       if (stock === 0) {
@@ -106,7 +110,7 @@ export const columns: ColumnDef<Producto>[] = [
       } else if (stock < 4) {
         stockText = `Bajo: ${stock}`
       }
-      
+
       return (
         <div className="text-center">
           <Badge variant={badgeVariant}>{stockText}</Badge>
@@ -116,24 +120,22 @@ export const columns: ColumnDef<Producto>[] = [
   },
   {
     id: "actions",
-    cell: ({ row }) => {
+    cell: ({ row, table }) => {
       const router = useRouter()
       const producto = row.original
       const [isDeleting, setIsDeleting] = useState(false)
+      const deleteRow = table.options.meta?.deleteRow
 
       const handleDelete = async () => {
         setIsDeleting(true)
         try {
-          const response = await fetch(`/api/productos/${producto.id}`, {
-            method: "DELETE",
-          })
-
-          if (response.ok) {
-            toast.success("Producto eliminado correctamente")
-            router.refresh()
-          } else {
-            const error = await response.json()
-            toast.error(error.error || "Error al eliminar el producto")
+          if (deleteRow) {
+            const success = await deleteRow(producto.id)
+            if (success) {
+              toast.success("Producto eliminado correctamente")
+            } else {
+              toast.error("Error al eliminar el producto")
+            }
           }
         } catch (error) {
           console.error("Error al eliminar el producto:", error)
@@ -187,3 +189,4 @@ export const columns: ColumnDef<Producto>[] = [
     },
   },
 ]
+

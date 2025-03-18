@@ -39,22 +39,21 @@ export const columns: ColumnDef<Proveedor>[] = [
   {
     id: "acciones",
     header: "Acciones",
-    cell: ({ row }) => {
+    cell: ({ row, table }) => {
       const router = useRouter()
       const proveedor = row.original
+      const deleteRow = table.options.meta?.deleteRow
 
       const handleDelete = async (id: number) => {
         if (confirm("¿Estás seguro de que deseas eliminar este proveedor?")) {
           try {
-            const response = await fetch(`/api/proveedores/${id}`, {
-              method: "DELETE",
-            })
-
-            if (response.ok) {
-              toast.success("Proveedor eliminado correctamente")
-              router.refresh()
-            } else {
-              toast.error("Error al eliminar el proveedor")
+            if (deleteRow) {
+              const success = await deleteRow(id)
+              if (success) {
+                toast.success("Proveedor eliminado correctamente")
+              } else {
+                toast.error("Error al eliminar el proveedor")
+              }
             }
           } catch (error) {
             console.error("Error al eliminar el proveedor:", error)

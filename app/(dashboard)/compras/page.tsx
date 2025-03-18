@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -17,25 +17,44 @@ export default function ComprasPage() {
   const [compras, setCompras] = useState<Compra[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    const fetchCompras = async () => {
-      try {
-        const response = await fetch("/api/compras")
-        if (response.ok) {
-          const data = await response.json()
-          setCompras(data)
-        } else {
-          console.error("Error al obtener compras")
-        }
-      } catch (error) {
-        console.error("Error al obtener compras:", error)
-      } finally {
-        setIsLoading(false)
+  const fetchCompras = useCallback(async () => {
+    try {
+      const response = await fetch("/api/compras")
+      if (response.ok) {
+        const data = await response.json()
+        setCompras(data)
+      } else {
+        console.error("Error al obtener compras")
       }
+    } catch (error) {
+      console.error("Error al obtener compras:", error)
+    } finally {
+      setIsLoading(false)
     }
-
-    fetchCompras()
   }, [])
+
+  useEffect(() => {
+    fetchCompras()
+  }, [fetchCompras])
+
+  // Función para eliminar una compra y actualizar la lista
+  const handleDeleteCompra = async (id: number) => {
+    try {
+      const response = await fetch(`/api/compras/${id}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        // Actualizar el estado local eliminando la compra
+        setCompras((prevCompras) => prevCompras.filter((compra) => compra.id !== id))
+        return true
+      }
+      return false
+    } catch (error) {
+      console.error("Error al eliminar la compra:", error)
+      return false
+    }
+  }
 
   return (
     <>
@@ -67,6 +86,7 @@ export default function ComprasPage() {
           data={compras}
           searchKey="proveedor_nombre"
           searchPlaceholder="Buscar por proveedor..."
+          deleteRow={handleDeleteCompra}
         />
       )}
     </>

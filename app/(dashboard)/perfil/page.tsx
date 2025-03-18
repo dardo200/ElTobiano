@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -30,6 +30,24 @@ type FormValues = z.infer<typeof formSchema>
 export default function PerfilPage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
+  const [usuario, setUsuario] = useState({ usuario: "", rol: "" })
+  const [ultimoAcceso, setUltimoAcceso] = useState(new Date())
+
+  useEffect(() => {
+    const fetchUsuario = async () => {
+      try {
+        const response = await fetch("/api/auth/me")
+        if (response.ok) {
+          const data = await response.json()
+          setUsuario(data)
+        }
+      } catch (error) {
+        console.error("Error al obtener información del usuario:", error)
+      }
+    }
+
+    fetchUsuario()
+  }, [])
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -172,15 +190,15 @@ export default function PerfilPage() {
             <div className="space-y-4">
               <div>
                 <h3 className="text-sm font-medium text-muted-foreground">Usuario</h3>
-                <p className="text-lg">admin</p>
+                <p className="text-lg">{usuario.usuario || "Cargando..."}</p>
               </div>
               <div>
                 <h3 className="text-sm font-medium text-muted-foreground">Rol</h3>
-                <p className="text-lg">Administrador</p>
+                <p className="text-lg">{usuario.rol || "Cargando..."}</p>
               </div>
               <div>
                 <h3 className="text-sm font-medium text-muted-foreground">Último acceso</h3>
-                <p className="text-lg">{new Date().toLocaleDateString()}</p>
+                <p className="text-lg">{ultimoAcceso.toLocaleDateString()}</p>
               </div>
             </div>
           </CardContent>

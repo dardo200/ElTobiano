@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -15,25 +15,44 @@ export default function ClientesPage() {
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    const fetchClientes = async () => {
-      try {
-        const response = await fetch("/api/clientes")
-        if (response.ok) {
-          const data = await response.json()
-          setClientes(data)
-        } else {
-          console.error("Error al obtener clientes")
-        }
-      } catch (error) {
-        console.error("Error al obtener clientes:", error)
-      } finally {
-        setIsLoading(false)
+  const fetchClientes = useCallback(async () => {
+    try {
+      const response = await fetch("/api/clientes")
+      if (response.ok) {
+        const data = await response.json()
+        setClientes(data)
+      } else {
+        console.error("Error al obtener clientes")
       }
+    } catch (error) {
+      console.error("Error al obtener clientes:", error)
+    } finally {
+      setIsLoading(false)
     }
-
-    fetchClientes()
   }, [])
+
+  useEffect(() => {
+    fetchClientes()
+  }, [fetchClientes])
+
+  // Función para eliminar un cliente y actualizar la lista
+  const handleDeleteCliente = async (id: number) => {
+    try {
+      const response = await fetch(`/api/clientes/${id}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        // Actualizar el estado local eliminando el cliente
+        setClientes((prevClientes) => prevClientes.filter((cliente) => cliente.id !== id))
+        return true
+      }
+      return false
+    } catch (error) {
+      console.error("Error al eliminar el cliente:", error)
+      return false
+    }
+  }
 
   return (
     <>
@@ -50,7 +69,13 @@ export default function ClientesPage() {
           <p className="text-muted-foreground">Cargando clientes...</p>
         </div>
       ) : (
-        <DataTable columns={columns} data={clientes} searchKey="nombre" searchPlaceholder="Buscar clientes..." />
+        <DataTable
+          columns={columns}
+          data={clientes}
+          searchKey="nombre"
+          searchPlaceholder="Buscar clientes..."
+          deleteRow={handleDeleteCliente}
+        />
       )}
     </>
   )

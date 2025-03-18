@@ -39,22 +39,21 @@ export const columns: ColumnDef<Cliente>[] = [
   {
     id: "acciones",
     header: "Acciones",
-    cell: ({ row }) => {
+    cell: ({ row, table }) => {
       const router = useRouter()
       const cliente = row.original
+      const deleteRow = table.options.meta?.deleteRow
 
       const handleDelete = async (id: number) => {
         if (confirm("¿Estás seguro de que deseas eliminar este cliente?")) {
           try {
-            const response = await fetch(`/api/clientes/${id}`, {
-              method: "DELETE",
-            })
-
-            if (response.ok) {
-              toast.success("Cliente eliminado correctamente")
-              router.refresh()
-            } else {
-              toast.error("Error al eliminar el cliente")
+            if (deleteRow) {
+              const success = await deleteRow(id)
+              if (success) {
+                toast.success("Cliente eliminado correctamente")
+              } else {
+                toast.error("Error al eliminar el cliente")
+              }
             }
           } catch (error) {
             console.error("Error al eliminar el cliente:", error)

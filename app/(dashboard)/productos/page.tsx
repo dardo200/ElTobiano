@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -21,27 +21,27 @@ export default function ProductosPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
 
-  useEffect(() => {
-    const fetchProductos = async () => {
-      try {
-        const response = await fetch("/api/productos")
-        if (response.ok) {
-          const data = await response.json()
-          setProductos(data)
-          setFilteredProductos(data)
-        } else {
-          console.error("Error al obtener productos")
-          toast.error("No se pudieron cargar los productos")
-        }
-      } catch (error) {
-        console.error("Error al obtener productos:", error)
-        toast.error("Error al cargar los productos")
-      } finally {
-        // Siempre terminamos la carga, incluso si hay un error
-        setIsLoading(false)
+  const fetchProductos = useCallback(async () => {
+    try {
+      const response = await fetch("/api/productos")
+      if (response.ok) {
+        const data = await response.json()
+        setProductos(data)
+        setFilteredProductos(data)
+      } else {
+        console.error("Error al obtener productos")
+        toast.error("No se pudieron cargar los productos")
       }
+    } catch (error) {
+      console.error("Error al obtener productos:", error)
+      toast.error("Error al cargar los productos")
+    } finally {
+      // Siempre terminamos la carga, incluso si hay un error
+      setIsLoading(false)
     }
+  }, [])
 
+  useEffect(() => {
     // Establecer un timeout para mostrar el estado de carga por al menos 500ms
     // para evitar parpadeos en conexiones rápidas
     const minLoadingTime = 500
@@ -55,7 +55,7 @@ export default function ProductosPage() {
         }, minLoadingTime - elapsedTime)
       }
     })
-  }, [])
+  }, [fetchProductos])
 
   // Función para filtrar productos por nombre o código
   useEffect(() => {
@@ -71,6 +71,26 @@ export default function ProductosPage() {
     )
     setFilteredProductos(filtered)
   }, [searchTerm, productos])
+
+  // Función para eliminar un producto y actualizar la lista
+  const handleDeleteProducto = async (id: number) => {
+    try {
+      const response = await fetch(`/api/productos/${id}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        // Actualizar el estado local eliminando el producto
+        setProductos((prevProductos) => prevProductos.filter((producto) => producto.id !== id))
+        setFilteredProductos((prevProductos) => prevProductos.filter((producto) => producto.id !== id))
+        return true
+      }
+      return false
+    } catch (error) {
+      console.error("Error al eliminar el producto:", error)
+      return false
+    }
+  }
 
   return (
     <>
@@ -110,7 +130,7 @@ export default function ProductosPage() {
               className="max-w-sm"
             />
           </div>
-          <DataTable columns={columns} data={filteredProductos} />
+          <DataTable columns={columns} data={filteredProductos} deleteRow={handleDeleteProducto} />
         </>
       )}
     </>
