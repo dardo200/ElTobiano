@@ -1,110 +1,189 @@
 "use client"
 
-import type { ColumnDef } from "@tanstack/react-table"
-import { ArrowUpDown, Edit, Trash } from "lucide-react"
+import { ColumnDef } from "@tanstack/react-table"
+import { ArrowUpDown, MoreHorizontal, Edit, Trash } from 'lucide-react'
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
-import type { Producto } from "@/types"
 import { useRouter } from "next/navigation"
 import { toast } from "@/components/ui/use-toast"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { useState } from "react"
+import type { Producto } from "@/types"
 
 export const columns: ColumnDef<Producto>[] = [
   {
-    accessorKey: "codigo",
-    header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-        Código
-        <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
+    id: "select",
+    header: ({ table }) => (
+      <Checkbox
+        checked={
+          table.getIsAllPageRowsSelected() ||
+          (table.getIsSomePageRowsSelected() && "indeterminate")
+        }
+        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+        aria-label="Select all"
+      />
     ),
-    cell: ({ row }) => <div>{row.getValue("codigo") || "-"}</div>,
+    cell: ({ row }) => (
+      <Checkbox
+        checked={row.getIsSelected()}
+        onCheckedChange={(value) => row.toggleSelected(!!value)}
+        aria-label="Select row"
+      />
+    ),
+    enableSorting: false,
+    enableHiding: false,
+  },
+  {
+    accessorKey: "codigo",
+    header: "Código",
+    cell: ({ row }) => <div className="font-mono">{row.getValue("codigo") || "N/A"}</div>,
   },
   {
     accessorKey: "nombre",
-    header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-        Nombre
-        <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
-    ),
+    header: ({ column }) => {
+      return (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Nombre
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      )
+    },
+    cell: ({ row }) => <div className="font-medium">{row.getValue("nombre")}</div>,
   },
   {
     accessorKey: "descripcion",
     header: "Descripción",
-    cell: ({ row }) => <div className="max-w-[300px] truncate">{row.getValue("descripcion") || "-"}</div>,
+    cell: ({ row }) => {
+      const descripcion = row.getValue("descripcion") as string
+      return <div className="truncate max-w-[300px]">{descripcion || "Sin descripción"}</div>
+    },
   },
   {
     accessorKey: "precio",
-    header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-        Precio
-        <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
-    ),
+    header: () => <div className="text-right">Precio</div>,
     cell: ({ row }) => {
-      const precio = Number.parseFloat(row.getValue("precio"))
+      const precio = parseFloat(row.getValue("precio"))
       const formatted = new Intl.NumberFormat("es-AR", {
         style: "currency",
         currency: "ARS",
       }).format(precio)
 
-      return <div>{formatted}</div>
+      return <div className="text-right font-medium">{formatted}</div>
     },
   },
   {
     accessorKey: "stock",
-    header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-        Stock
-        <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
-    ),
+    header: () => <div className="text-center">Stock</div>,
     cell: ({ row }) => {
-      const stock = Number.parseInt(row.getValue("stock") || "0")
-
-      return <Badge variant={stock > 0 ? "outline" : "destructive"}>{stock}</Badge>
-    },
-  },
-  {
-    id: "acciones",
-    header: "Acciones",
-    cell: ({ row }) => {
-      const router = useRouter()
-      const producto = row.original
-
-      const handleDelete = async (id: number) => {
-        if (confirm("¿Estás seguro de que deseas eliminar este producto?")) {
-          try {
-            const response = await fetch(`/api/productos/${id}`, {
-              method: "DELETE",
-            })
-
-            if (response.ok) {
-              toast.success("Producto eliminado correctamente")
-              router.refresh()
-            } else {
-              toast.error("Error al eliminar el producto")
-            }
-          } catch (error) {
-            console.error("Error al eliminar el producto:", error)
-            toast.error("Error al eliminar el producto")
-          }
-        }
+      const stock = parseInt(row.getValue("stock") || "0")
+      
+      // Determinar el color según el nivel de stock
+      let badgeVariant = "default"
+      if (stock <= 0) {
+        badgeVariant = "destructive" // Rojo para stock 0
+      } else if (stock < 4) {
+        badgeVariant = "warning" // Amarillo para stock bajo (1-3)
+      } else {
+        badgeVariant = "success" // Verde para stock suficiente (4+)
       }
-
+      
+      // Determinar el texto según el nivel de stock
+      let stockText = `${stock} unidades`
+      if (stock === 0) {
+        stockText = "Sin stock"
+      } else if (stock < 4) {
+        stockText = `Bajo: ${stock}`
+      }
+      
       return (
-        <div className="flex items-center justify-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => router.push(`/productos/${producto.id}`)}>
-            <Edit className="h-4 w-4" />
-            <span className="ml-2">Editar</span>
-          </Button>
-          <Button variant="destructive" size="sm" onClick={() => handleDelete(producto.id)}>
-            <Trash className="h-4 w-4" />
-            <span className="ml-2">Eliminar</span>
-          </Button>
+        <div className="text-center">
+          <Badge variant={badgeVariant}>{stockText}</Badge>
         </div>
       )
     },
   },
-]
+  {
+    id: "actions",
+    cell: ({ row }) => {
+      const router = useRouter()
+      const producto = row.original
+      const [isDeleting, setIsDeleting] = useState(false)
 
+      const handleDelete = async () => {
+        setIsDeleting(true)
+        try {
+          const response = await fetch(`/api/productos/${producto.id}`, {
+            method: "DELETE",
+          })
+
+          if (response.ok) {
+            toast.success("Producto eliminado correctamente")
+            router.refresh()
+          } else {
+            const error = await response.json()
+            toast.error(error.error || "Error al eliminar el producto")
+          }
+        } catch (error) {
+          console.error("Error al eliminar el producto:", error)
+          toast.error("Error al eliminar el producto")
+        } finally {
+          setIsDeleting(false)
+        }
+      }
+
+      return (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="h-8 w-8 p-0">
+              <span className="sr-only">Abrir menú</span>
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+            <DropdownMenuItem onClick={() => router.push(`/productos/${producto.id}`)}>
+              <Edit className="mr-2 h-4 w-4" />
+              Editar
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                  <Trash className="mr-2 h-4 w-4" />
+                  Eliminar
+                </DropdownMenuItem>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta acción no se puede deshacer. Esto eliminará permanentemente el producto{" "}
+                    <span className="font-bold">{producto.nombre}</span> y lo quitará del sistema.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDelete} disabled={isDeleting}>
+                    {isDeleting ? "Eliminando..." : "Eliminar"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )
+    },
+  },
+]

@@ -77,14 +77,42 @@ export default function DespacharVentaPage() {
 
                     // Si el combo tiene detalles, procesarlos
                     if (comboData.detalles && comboData.detalles.length > 0) {
+                      // Para cada detalle del combo, obtener el producto completo
                       for (const detalleCombo of comboData.detalles) {
-                        productosCombo.push({
-                          id: detalleCombo.id_producto,
-                          nombre: detalleCombo.producto?.nombre || `Producto #${detalleCombo.id_producto}`,
-                          codigo: detalleCombo.producto?.codigo || "",
-                          cantidad: detalleCombo.cantidad * detalle.cantidad, // Multiplicar por la cantidad del combo
-                          verificado: false,
-                        })
+                        // Obtener información completa del producto
+                        try {
+                          const productoResponse = await fetch(`/api/productos/${detalleCombo.id_producto}`)
+                          if (productoResponse.ok) {
+                            const productoData = await productoResponse.json()
+
+                            productosCombo.push({
+                              id: detalleCombo.id_producto,
+                              nombre: productoData.nombre || `Producto #${detalleCombo.id_producto}`,
+                              codigo: productoData.codigo || "",
+                              cantidad: detalleCombo.cantidad * detalle.cantidad, // Multiplicar por la cantidad del combo
+                              verificado: false,
+                            })
+                          } else {
+                            // Si hay error al obtener el producto, usar la información básica
+                            productosCombo.push({
+                              id: detalleCombo.id_producto,
+                              nombre: detalleCombo.producto?.nombre || `Producto #${detalleCombo.id_producto}`,
+                              codigo: detalleCombo.producto?.codigo || "",
+                              cantidad: detalleCombo.cantidad * detalle.cantidad,
+                              verificado: false,
+                            })
+                          }
+                        } catch (error) {
+                          console.error("Error al obtener detalles del producto:", error)
+                          // Si hay error, usar la información básica
+                          productosCombo.push({
+                            id: detalleCombo.id_producto,
+                            nombre: detalleCombo.producto?.nombre || `Producto #${detalleCombo.id_producto}`,
+                            codigo: detalleCombo.producto?.codigo || "",
+                            cantidad: detalleCombo.cantidad * detalle.cantidad,
+                            verificado: false,
+                          })
+                        }
                       }
                     }
 

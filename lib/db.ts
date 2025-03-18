@@ -5,7 +5,7 @@ import { Pool, PoolClient } from "pg";
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : false,
-  max: 20, // Número máximo de conexiones en el pool
+  max: 10, // Número máximo de conexiones en el pool
   idleTimeoutMillis: 30000, // Cierra las conexiones inactivas después de 30 segundos
   connectionTimeoutMillis: 5000, // Tiempo máximo para establecer una conexión (5 segundos)
 });

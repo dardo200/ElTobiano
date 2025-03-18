@@ -246,19 +246,34 @@ export async function contarProductosSinStock(): Promise<number> {
   }
 }
 
-// Agregar esta función al final del archivo
-export async function obtenerProductosStockBajo(limite: number): Promise<Producto[]> {
+// Modificar esta función para soportar los nuevos parámetros
+export async function obtenerProductosStockBajo(limite: number, exacto = false, minimo = 0): Promise<Producto[]> {
   try {
-    const result = await executeQuery(
-      `
+    let query = `
       SELECT p.*, COALESCE(s.cantidad, 0) as stock 
       FROM Productos p 
       LEFT JOIN Stock s ON p.id = s.id_producto
-      WHERE COALESCE(s.cantidad, 0) < $1
-      ORDER BY COALESCE(s.cantidad, 0) ASC
-    `,
-      [limite],
-    )
+    `
+
+    const params = []
+
+    if (exacto) {
+      // Si exacto es true, buscar productos con stock exactamente igual a 'minimo'
+      query += ` WHERE COALESCE(s.cantidad, 0) = $1`
+      params.push(minimo)
+    } else if (minimo > 0) {
+      // Si hay un mínimo, buscar productos con stock entre minimo y limite
+      query += ` WHERE COALESCE(s.cantidad, 0) >= $1 AND COALESCE(s.cantidad, 0) < $2`
+      params.push(minimo, limite)
+    } else {
+      // Caso normal: buscar productos con stock menor que limite
+      query += ` WHERE COALESCE(s.cantidad, 0) < $1`
+      params.push(limite)
+    }
+
+    query += ` ORDER BY COALESCE(s.cantidad, 0) ASC`
+
+    const result = await executeQuery(query, params)
     return result.rows
   } catch (error) {
     console.error(`Error al obtener productos con stock bajo:`, error)

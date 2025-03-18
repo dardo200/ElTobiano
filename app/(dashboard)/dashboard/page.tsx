@@ -9,7 +9,7 @@ import { Heading } from "@/components/ui/heading"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { DashboardStats, Venta, Producto } from "@/types"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
-import { DollarSign, Package, Users, ShoppingCart, AlertCircle, TruckIcon, ArchiveIcon } from "lucide-react"
+import { DollarSign, Package, Users, ShoppingCart, AlertCircle, TruckIcon, ArchiveIcon } from 'lucide-react'
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "@/components/ui/use-toast"
 import { Badge } from "@/components/ui/badge"
@@ -20,7 +20,8 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [ventasPendientes, setVentasPendientes] = useState<Venta[]>([])
-  const [productosStockBajo, setProductosStockBajo] = useState<Producto[]>([])
+  const [productosSinStock, setProductosSinStock] = useState<Producto[]>([])
+  const [productosBajoStock, setProductosBajoStock] = useState<Producto[]>([])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -41,13 +42,21 @@ export default function DashboardPage() {
         const ventasData = await ventasResponse.json()
         setVentasPendientes(ventasData)
 
-        // Obtener productos con stock bajo
-        const productosResponse = await fetch("/api/productos/stock-bajo")
-        if (!productosResponse.ok) {
-          throw new Error("Error al cargar los productos con stock bajo")
+        // Obtener productos sin stock (cantidad = 0)
+        const sinStockResponse = await fetch("/api/productos/stock-bajo?limite=0&exacto=true")
+        if (!sinStockResponse.ok) {
+          throw new Error("Error al cargar los productos sin stock")
         }
-        const productosData = await productosResponse.json()
-        setProductosStockBajo(productosData)
+        const sinStockData = await sinStockResponse.json()
+        setProductosSinStock(sinStockData)
+
+        // Obtener productos con bajo stock (cantidad < 4 y > 0)
+        const bajoStockResponse = await fetch("/api/productos/stock-bajo?limite=4&minimo=1")
+        if (!bajoStockResponse.ok) {
+          throw new Error("Error al cargar los productos con bajo stock")
+        }
+        const bajoStockData = await bajoStockResponse.json()
+        setProductosBajoStock(bajoStockData)
       } catch (error) {
         console.error("Error al obtener datos:", error)
         setError("Ocurrió un error al cargar los datos")
@@ -146,6 +155,10 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats?.totalProductos || 0}</div>
+            <div className="flex gap-2 mt-2">
+              <Badge variant="destructive">Sin stock: {productosSinStock.length}</Badge>
+              <Badge variant="warning">Bajo stock: {productosBajoStock.length}</Badge>
+            </div>
           </CardContent>
         </Card>
 
@@ -215,19 +228,19 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      {/* Sección de Productos con Stock Bajo */}
+      {/* Sección de Productos sin Stock */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Productos con Stock Bajo</CardTitle>
+          <CardTitle>Productos Sin Stock</CardTitle>
           <Button variant="outline" size="sm" onClick={() => handleCardClick("/productos")}>
             <ArchiveIcon className="mr-2 h-4 w-4" />
             Ver Todos
           </Button>
         </CardHeader>
         <CardContent>
-          {productosStockBajo.length > 0 ? (
+          {productosSinStock.length > 0 ? (
             <div className="space-y-4">
-              {productosStockBajo.map((producto) => (
+              {productosSinStock.slice(0, 5).map((producto) => (
                 <div key={producto.id} className="flex items-center justify-between border-b pb-2">
                   <div>
                     <p className="font-medium">{producto.nombre}</p>
@@ -236,7 +249,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="flex flex-col items-end">
                     <p className="font-bold">${producto.precio.toFixed(2)}</p>
-                    <Badge variant="destructive">Stock: {producto.stock}</Badge>
+                    <Badge variant="destructive">Sin stock</Badge>
                     <Button
                       variant="outline"
                       size="sm"
@@ -253,7 +266,50 @@ export default function DashboardPage() {
               ))}
             </div>
           ) : (
-            <p className="text-center text-muted-foreground py-4">No hay productos con stock bajo</p>
+            <p className="text-center text-muted-foreground py-4">No hay productos sin stock</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Sección de Productos con Bajo Stock */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Productos con Bajo Stock</CardTitle>
+          <Button variant="outline" size="sm" onClick={() => handleCardClick("/productos")}>
+            <ArchiveIcon className="mr-2 h-4 w-4" />
+            Ver Todos
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {productosBajoStock.length > 0 ? (
+            <div className="space-y-4">
+              {productosBajoStock.slice(0, 5).map((producto) => (
+                <div key={producto.id} className="flex items-center justify-between border-b pb-2">
+                  <div>
+                    <p className="font-medium">{producto.nombre}</p>
+                    <p className="text-sm text-muted-foreground truncate max-w-md">{producto.descripcion}</p>
+                    <p className="text-sm text-muted-foreground">Código: {producto.codigo}</p>
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <p className="font-bold">${producto.precio.toFixed(2)}</p>
+                    <Badge variant="warning">Stock: {producto.stock}</Badge>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-2"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        router.push(`/productos/${producto.id}`)
+                      }}
+                    >
+                      Editar
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-center text-muted-foreground py-4">No hay productos con bajo stock</p>
           )}
         </CardContent>
       </Card>
@@ -336,4 +392,3 @@ export default function DashboardPage() {
     </div>
   )
 }
-
