@@ -23,88 +23,84 @@ export async function obtenerVentas(): Promise<Venta[]> {
 }
 
 export async function obtenerVentaPorId(id: number): Promise<Venta | null> {
+  const client = await import("./db").then((module) => module.getClient())
   try {
-    const client = await import("./db").then((module) => module.getClient())
-    
+    // Obtener la venta
+    const ventaResult = await client.query(
+      `
+      SELECT v.*, c.nombre as cliente_nombre, c.email, c.telefono, c.direccion
+      FROM Ventas v
+      LEFT JOIN Clientes c ON v.id_cliente = c.id
+      WHERE v.id = $1
+    `,
+      [id],
+    )
 
-    try {
-      // Obtener la venta
-      const ventaResult = await client.query(
-        `
-        SELECT v.*, c.nombre as cliente_nombre, c.email, c.telefono, c.direccion
-        FROM Ventas v
-        LEFT JOIN Clientes c ON v.id_cliente = c.id
-        WHERE v.id = $1
-      `,
-        [id],
-      )
+    if (ventaResult.rows.length === 0) {
+      return null
+    }
 
-      if (ventaResult.rows.length === 0) {
-        return null
-      }
+    const venta = ventaResult.rows[0]
 
-      const venta = ventaResult.rows[0]
+    // Obtener los detalles de la venta
+    const detallesResult = await client.query(
+      `
+      SELECT 
+        dv.*, 
+        CASE 
+          WHEN dv.es_combo = false THEN p.nombre 
+          WHEN dv.es_combo = true THEN cb.nombre 
+          ELSE NULL 
+        END as producto_nombre,
+        CASE 
+          WHEN dv.es_combo = false THEN p.descripcion 
+          WHEN dv.es_combo = true THEN cb.descripcion 
+          ELSE NULL 
+        END as producto_descripcion,
+        CASE 
+          WHEN dv.es_combo = false THEN p.codigo 
+          WHEN dv.es_combo = true THEN cb.codigo 
+          ELSE NULL 
+        END as producto_codigo
+      FROM DetalleVentas dv
+      LEFT JOIN Productos p ON dv.id_producto = p.id AND dv.es_combo = false
+      LEFT JOIN Combos cb ON dv.id_producto = cb.id AND dv.es_combo = true
+      WHERE dv.id_venta = $1
+    `,
+      [id],
+    )
 
-      // Obtener los detalles de la venta
-      const detallesResult = await client.query(
-        `
-        SELECT 
-          dv.*, 
-          CASE 
-            WHEN dv.es_combo = false THEN p.nombre 
-            WHEN dv.es_combo = true THEN cb.nombre 
-            ELSE NULL 
-          END as producto_nombre,
-          CASE 
-            WHEN dv.es_combo = false THEN p.descripcion 
-            WHEN dv.es_combo = true THEN cb.descripcion 
-            ELSE NULL 
-          END as producto_descripcion,
-          CASE 
-            WHEN dv.es_combo = false THEN p.codigo 
-            WHEN dv.es_combo = true THEN cb.codigo 
-            ELSE NULL 
-          END as producto_codigo
-        FROM DetalleVentas dv
-        LEFT JOIN Productos p ON dv.id_producto = p.id AND dv.es_combo = false
-        LEFT JOIN Combos cb ON dv.id_producto = cb.id AND dv.es_combo = true
-        WHERE dv.id_venta = $1
-      `,
-        [id],
-      )
+    const detalles = detallesResult.rows.map((row) => ({
+      ...row,
+      producto: row.producto_nombre
+        ? {
+            id: row.id_producto,
+            nombre: row.producto_nombre,
+            descripcion: row.producto_descripcion,
+            precio: row.precio,
+            codigo: row.producto_codigo,
+          }
+        : undefined,
+    }))
 
-      const detalles = detallesResult.rows.map((row) => ({
-        ...row,
-        producto: row.producto_nombre
-          ? {
-              id: row.id_producto,
-              nombre: row.producto_nombre,
-              descripcion: row.producto_descripcion,
-              precio: row.precio,
-              codigo: row.producto_codigo,
-            }
-          : undefined,
-      }))
-
-      return {
-        ...venta,
-        cliente: venta.cliente_nombre
-          ? {
-              id: venta.id_cliente,
-              nombre: venta.cliente_nombre,
-              email: venta.email,
-              telefono: venta.telefono,
-              direccion: venta.direccion,
-            }
-          : undefined,
-        detalles,
-      }
-    } finally {
-      await client.end()
+    return {
+      ...venta,
+      cliente: venta.cliente_nombre
+        ? {
+            id: venta.id_cliente,
+            nombre: venta.cliente_nombre,
+            email: venta.email,
+            telefono: venta.telefono,
+            direccion: venta.direccion,
+          }
+        : undefined,
+      detalles,
     }
   } catch (error) {
-    console.error(`Error al obtener venta con id ${id}:`, error)
+    console.error("Error al obtener venta:", error)
     throw error
+  } finally {
+    client.release() // Liberar la conexión de vuelta al pool
   }
 }
 
