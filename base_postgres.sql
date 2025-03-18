@@ -1,3 +1,4 @@
+CREATE DATABASE comercio;
 -- Creación de la tabla de Proveedores
 CREATE TABLE IF NOT EXISTS Proveedor (
     id SERIAL PRIMARY KEY,
