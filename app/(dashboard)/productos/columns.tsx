@@ -76,13 +76,26 @@ export const columns: ColumnDef<Producto>[] = [
   },
   {
     accessorKey: "precio",
-    header: () => <div className="text-right">Precio</div>,
+    header: () => <div className="text-right">Precio Venta</div>,
     cell: ({ row }) => {
       const precio = Number.parseFloat(row.getValue("precio"))
       const formatted = new Intl.NumberFormat("es-AR", {
         style: "currency",
         currency: "ARS",
       }).format(precio)
+
+      return <div className="text-right font-medium">{formatted}</div>
+    },
+  },
+  {
+    accessorKey: "precio_compra",
+    header: () => <div className="text-right">Precio Compra</div>,
+    cell: ({ row }) => {
+      const precio_compra = Number.parseFloat(row.getValue("precio_compra") || 0)
+      const formatted = new Intl.NumberFormat("es-AR", {
+        style: "currency",
+        currency: "ARS",
+      }).format(precio_compra)
 
       return <div className="text-right font-medium">{formatted}</div>
     },

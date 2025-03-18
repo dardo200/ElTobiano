@@ -10,6 +10,7 @@ export interface Producto {
   nombre: string
   descripcion: string
   precio: number
+  precio_compra?: number
   stock?: number
   codigo?: string // Agregamos campo para código de barras
 }

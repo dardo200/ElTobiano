@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Card, CardContent } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
 import type { Producto, Proveedor } from "@/types"
 import { toast } from "@/components/ui/use-toast"
 
@@ -25,6 +26,7 @@ const formSchema = z.object({
         id_producto: z.string().min(1, "Producto requerido"),
         cantidad: z.coerce.number().min(1, "Cantidad mínima es 1"),
         precio: z.coerce.number().min(0, "Precio debe ser mayor o igual a 0"),
+        actualizar_precio_compra: z.boolean().default(true),
       }),
     )
     .min(1, "Debe agregar al menos un producto"),
@@ -69,6 +71,7 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
           id_producto: "",
           cantidad: 1,
           precio: 0,
+          actualizar_precio_compra: true,
         },
       ],
     },
@@ -92,7 +95,7 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
   const handleProductoChange = (index: number, id_producto: string) => {
     const producto = productos.find((p) => p.id.toString() === id_producto)
     if (producto) {
-      form.setValue(`detalles.${index}.precio`, producto.precio)
+      form.setValue(`detalles.${index}.precio`, producto.precio_compra || producto.precio)
     }
   }
 
@@ -103,7 +106,7 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
       const producto = productos.find((p) => p.codigo === barcodeInput || p.id.toString() === barcodeInput)
       if (producto) {
         form.setValue(`detalles.${index}.id_producto`, producto.id.toString())
-        form.setValue(`detalles.${index}.precio`, producto.precio)
+        form.setValue(`detalles.${index}.precio`, producto.precio_compra || producto.precio)
         toast.success(`Producto escaneado: ${producto.nombre}`)
       } else {
         toast.error("Producto no encontrado")
@@ -124,7 +127,8 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
           append({
             id_producto: producto.id.toString(),
             cantidad: 1,
-            precio: producto.precio,
+            precio: producto.precio_compra || producto.precio,
+            actualizar_precio_compra: true,
           })
           setSearchCode("")
           toast.success(`Producto agregado: ${producto.nombre}`)
@@ -154,6 +158,7 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
           id_producto: Number.parseInt(detalle.id_producto),
           cantidad: detalle.cantidad,
           precio: detalle.precio,
+          actualizar_precio_compra: detalle.actualizar_precio_compra,
         })),
       }
 
@@ -291,7 +296,7 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
                     name={`detalles.${index}.precio`}
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Precio</FormLabel>
+                        <FormLabel>Precio de Compra</FormLabel>
                         <FormControl>
                           <Input type="number" step="0.01" disabled={isLoading} {...field} />
                         </FormControl>
@@ -299,13 +304,28 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
                       </FormItem>
                     )}
                   />
-                  <div className="flex items-end">
+                  <div className="flex flex-col justify-between">
+                    <FormField
+                      control={form.control}
+                      name={`detalles.${index}.actualizar_precio_compra`}
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-start space-x-3 space-y-0 mb-4">
+                          <FormControl>
+                            <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                          </FormControl>
+                          <div className="space-y-1 leading-none">
+                            <FormLabel>Actualizar precio de compra</FormLabel>
+                          </div>
+                        </FormItem>
+                      )}
+                    />
                     <Button
                       type="button"
                       variant="destructive"
                       size="icon"
                       onClick={() => remove(index)}
                       disabled={isLoading || fields.length === 1}
+                      className="self-end"
                     >
                       <Trash className="h-4 w-4" />
                     </Button>
@@ -318,7 +338,7 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => append({ id_producto: "", cantidad: 1, precio: 0 })}
+            onClick={() => append({ id_producto: "", cantidad: 1, precio: 0, actualizar_precio_compra: true })}
             disabled={isLoading}
           >
             <Plus className="mr-2 h-4 w-4" />

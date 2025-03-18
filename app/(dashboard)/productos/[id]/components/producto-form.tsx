@@ -2,18 +2,19 @@
 
 import type React from "react"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { Loader2, Barcode, RefreshCw, Printer } from "lucide-react"
+import { Loader2, Barcode, RefreshCw, Printer, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import type { Producto } from "@/types"
 import { toast } from "@/components/ui/use-toast"
 
@@ -21,6 +22,7 @@ const formSchema = z.object({
   nombre: z.string().min(1, "El nombre es requerido"),
   descripcion: z.string().optional(),
   precio: z.coerce.number().min(0, "El precio debe ser mayor o igual a 0"),
+  precio_compra: z.coerce.number().min(0, "El precio de compra debe ser mayor o igual a 0"),
   stock: z.coerce.number().int().min(0, "El stock debe ser mayor o igual a 0"),
   codigo: z.string().min(1, "El código de barras es requerido"),
 })
@@ -36,6 +38,7 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({ initialData }) => {
   const [isLoading, setIsLoading] = useState(false)
   const [isGeneratingCode, setIsGeneratingCode] = useState(false)
   const [showBarcodeDialog, setShowBarcodeDialog] = useState(false)
+  const [showPriceWarning, setShowPriceWarning] = useState(false)
   const barcodeCanvasRef = useRef<HTMLCanvasElement>(null)
 
   const form = useForm<ProductoFormValues>({
@@ -44,10 +47,23 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({ initialData }) => {
       nombre: "",
       descripcion: "",
       precio: 0,
+      precio_compra: 0,
       stock: 0,
       codigo: "",
     },
   })
+
+  // Observar cambios en los precios para mostrar advertencia
+  const precio = form.watch("precio")
+  const precio_compra = form.watch("precio_compra")
+
+  useEffect(() => {
+    if (precio > 0 && precio_compra > 0 && precio < precio_compra) {
+      setShowPriceWarning(true)
+    } else {
+      setShowPriceWarning(false)
+    }
+  }, [precio, precio_compra])
 
   const onSubmit = async (data: ProductoFormValues) => {
     setIsLoading(true)
@@ -261,7 +277,20 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({ initialData }) => {
               name="precio"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Precio</FormLabel>
+                  <FormLabel>Precio de Venta</FormLabel>
+                  <FormControl>
+                    <Input type="number" step="0.01" disabled={isLoading} placeholder="0.00" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="precio_compra"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Precio de Compra</FormLabel>
                   <FormControl>
                     <Input type="number" step="0.01" disabled={isLoading} placeholder="0.00" {...field} />
                   </FormControl>
@@ -347,6 +376,18 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({ initialData }) => {
               </FormItem>
             )}
           />
+
+          {showPriceWarning && (
+            <Alert variant="warning">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Advertencia de precio</AlertTitle>
+              <AlertDescription>
+                El precio de venta (${precio}) es menor que el precio de compra (${precio_compra}). Esto resultará en
+                pérdidas por cada venta.
+              </AlertDescription>
+            </Alert>
+          )}
+
           <Separator />
           <div className="flex justify-end">
             <Button

@@ -89,7 +89,7 @@ export async function obtenerCompraPorId(id: number): Promise<Compra | null> {
 
 export async function crearCompra(
   compra: Omit<Compra, "id">,
-  detalles: { id_producto: number; cantidad: number; precio: number }[],
+  detalles: { id_producto: number; cantidad: number; precio: number; actualizar_precio_compra?: boolean }[],
 ): Promise<Compra> {
   try {
     const client = await import("./db").then((module) => module.getClient())
@@ -124,6 +124,14 @@ export async function crearCompra(
         `,
           [detalle.id_producto, detalle.cantidad],
         )
+
+        // Actualizar el precio de compra si se solicita
+        if (detalle.actualizar_precio_compra) {
+          await client.query("UPDATE Productos SET precio_compra = $1 WHERE id = $2", [
+            detalle.precio,
+            detalle.id_producto,
+          ])
+        }
       }
 
       await client.query("COMMIT")

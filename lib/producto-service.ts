@@ -82,8 +82,8 @@ export async function crearProducto(producto: Omit<Producto, "id">): Promise<Pro
 
       // Insertar producto usando el código como ID
       const resultProducto = await client.query(
-        "INSERT INTO Productos (nombre, descripcion, precio, codigo) VALUES ($1, $2, $3, $4) RETURNING *",
-        [producto.nombre, producto.descripcion, producto.precio, producto.codigo],
+        "INSERT INTO Productos (nombre, descripcion, precio, codigo, precio_compra) VALUES ($1, $2, $3, $4, $5) RETURNING *",
+        [producto.nombre, producto.descripcion, producto.precio, producto.codigo, producto.precio_compra || 0],
       )
 
       const nuevoProducto = resultProducto.rows[0]
@@ -151,6 +151,12 @@ export async function actualizarProducto(id: number, producto: Partial<Producto>
         paramIndex++
       }
 
+      if (producto.precio_compra !== undefined) {
+        updateFields.push(`precio_compra = $${paramIndex}`)
+        updateValues.push(producto.precio_compra)
+        paramIndex++
+      }
+
       if (producto.codigo !== undefined) {
         updateFields.push(`codigo = $${paramIndex}`)
         updateValues.push(producto.codigo)
@@ -195,6 +201,19 @@ export async function actualizarProducto(id: number, producto: Partial<Producto>
   } catch (error) {
     console.error(`Error al actualizar producto con id ${id}:`, error)
     throw error
+  }
+}
+
+export async function actualizarPrecioCompra(id: number, precio_compra: number): Promise<boolean> {
+  try {
+    const result = await executeQuery(
+      "UPDATE Productos SET precio_compra = $1 WHERE id = $2 RETURNING id",
+      [precio_compra, id]
+    );
+    return result.rows.length > 0;
+  } catch (error) {
+    console.error(`Error al actualizar precio de compra del producto con id ${id}:`, error);
+    throw error;
   }
 }
 
@@ -307,4 +326,3 @@ export async function verificarCodigoExiste(codigo: string): Promise<boolean> {
     throw error
   }
 }
-
