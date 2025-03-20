@@ -64,13 +64,18 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({ initialData }) => {
   const precio_mayorista = form.watch("precio_mayorista")
 
   useEffect(() => {
-    if (precio > 0 && precio_compra > 0 && precio < precio_compra) {
+    // Convertir los valores a números para asegurar una comparación correcta
+    const precioNum = Number.parseFloat(precio) || 0
+    const precioCNum = Number.parseFloat(precio_compra) || 0
+    const precioMNum = Number.parseFloat(precio_mayorista) || 0
+
+    if (precioNum > 0 && precioCNum > 0 && precioNum < precioCNum) {
       setShowPriceWarning(true)
     } else {
       setShowPriceWarning(false)
     }
 
-    if (precio_mayorista > 0 && precio > 0 && precio_mayorista >= precio) {
+    if (precioMNum > 0 && precioNum > 0 && precioMNum >= precioNum) {
       setShowMayoristaWarning(true)
     } else {
       setShowMayoristaWarning(false)
