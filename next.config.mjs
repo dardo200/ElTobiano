@@ -1,26 +1,32 @@
-let userConfig = undefined
-try {
-  userConfig = await import('./v0-user-next.config')
-} catch (e) {
-  // ignore error
-}
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  reactStrictMode: true,
+  env: {
+    DATABASE_URL: process.env.DATABASE_URL || 'postgresql://postgres:2502@192.168.0.221:5432/comercio',
+  },
+  // Asegúrate de que las imágenes de placeholder.svg estén permitidas
+  images: {
+    domains: ['placeholder.svg'],
+    unoptimized: true,
+  },
   eslint: {
     ignoreDuringBuilds: true,
   },
   typescript: {
     ignoreBuildErrors: true,
   },
-  images: {
-    unoptimized: false,
-  },
   experimental: {
     webpackBuildWorker: true,
     parallelServerBuildTraces: true,
     parallelServerCompiles: true,
   },
+};
+
+let userConfig = undefined
+try {
+  userConfig = await import('./v0-user-next.config')
+} catch (e) {
+  // ignore error
 }
 
 mergeConfig(nextConfig, userConfig)
@@ -46,3 +52,4 @@ function mergeConfig(nextConfig, userConfig) {
 }
 
 export default nextConfig
+

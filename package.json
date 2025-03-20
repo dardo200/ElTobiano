@@ -48,10 +48,11 @@
     "dotenv": "^16.4.7",
     "embla-carousel-react": "8.5.1",
     "input-otp": "1.4.1",
+    "jsbarcode": "latest",
     "lucide-react": "^0.454.0",
     "next": "15.1.0",
     "next-themes": "latest",
-    "pg": "latest",
+    "pg": "^8.14.1",
     "react": "^18.2.0",
     "react-day-picker": "latest",
     "react-dom": "^18.2.0",
@@ -63,11 +64,11 @@
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.6",
-    "zod": "latest",
-    "jsbarcode": "latest"
+    "zod": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",
+    "@types/pg": "^8.11.11",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "postcss": "^8",

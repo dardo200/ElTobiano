@@ -1,90 +1,51 @@
-import { Pool, PoolClient } from "pg";
+import { Pool } from "pg"
 
-// Configuración del pool de conexiones
+// Configuración de la conexión a la base de datos local
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_SSL === "true" ? { rejectUnauthorized: false } : false,
-  max: 30, // Número máximo de conexiones en el pool
-  idleTimeoutMillis: 30000, // Cierra las conexiones inactivas después de 30 segundos
-  connectionTimeoutMillis: 10000, // Tiempo máximo para establecer una conexión (10 segundos)
-});
+  connectionString: process.env.DATABASE_URL || "postgresql://postgres:2502@192.168.0.221:5432/comercio",
+})
 
-// Función para ejecutar consultas
-export async function executeQuery(text: string, params?: any[], client?: PoolClient, timeout?: number) {
-  const start = Date.now();
-  const queryClient = client || (await pool.connect()); // Usar el cliente proporcionado o obtener uno nuevo
+// Función para obtener un cliente de base de datos
+export function getClient() {
+  return pool.connect()
+}
+
+// Función para ejecutar consultas con timeout
+export async function executeQuery(query: string, params: any[] = [], timeout = 5000) {
+  const client = await pool.connect()
+  let timeoutId: NodeJS.Timeout
+
   try {
-    // Agregar timeout a la consulta si se proporciona
-    if (timeout) {
-      await queryClient.query(`SET statement_timeout = ${timeout}`); // Timeout en milisegundos
-    }
+    // Crear una promesa que se rechaza después del timeout
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error(`La consulta excedió el tiempo límite de ${timeout}ms`))
+      }, timeout)
+    })
 
-    const res = await queryClient.query(text, params);
-    const duration = Date.now() - start;
-    console.log("Executed query", { text, duration, rows: res.rowCount });
-    return res;
+    // Ejecutar la consulta con un timeout
+    const queryPromise = client.query(query, params)
+    const result = (await Promise.race([queryPromise, timeoutPromise])) as any
+
+    clearTimeout(timeoutId!)
+    return result
   } catch (error) {
-    console.error("Error executing query:", error);
-    throw error;
+    console.error("Error ejecutando consulta:", error)
+    throw error
   } finally {
-    if (!client) {
-      queryClient.release(); // Liberar la conexión solo si no se proporcionó un cliente
-      console.log("Conexión liberada. Conexiones activas:", pool.totalCount, "Inactivas:", pool.idleCount);
-    }
+    clearTimeout(timeoutId!)
+    client.release()
   }
 }
 
-// Función para obtener un cliente del pool
-export async function getClient() {
-  const client = await pool.connect();
-  console.log("Nueva conexión establecida. Conexiones activas:", pool.totalCount, "Inactivas:", pool.idleCount);
-  return client;
-}
-
-// Función para ejecutar transacciones
-export async function executeTransaction(queries: { text: string; params?: any[] }[], timeout?: number) {
-  const client = await getClient();
+// Función para probar la conexión a la base de datos
+export async function testConnection() {
   try {
-    await client.query("BEGIN"); // Iniciar la transacción
-
-    for (const query of queries) {
-      await executeQuery(query.text, query.params, client, timeout); // Usar el mismo cliente para todas las consultas
-    }
-
-    await client.query("COMMIT"); // Confirmar la transacción
-    console.log("Transacción completada correctamente.");
+    const result = await executeQuery("SELECT NOW()", [], 3000)
+    return { success: true, timestamp: result.rows[0].now }
   } catch (error) {
-    await client.query("ROLLBACK"); // Revertir la transacción en caso de error
-    console.error("Error executing transaction:", error);
-    throw error;
-  } finally {
-    client.release(); // Liberar la conexión
-    console.log("Conexión liberada. Conexiones activas:", pool.totalCount, "Inactivas:", pool.idleCount);
+    console.error("Error de conexión:", error)
+    return { success: false, error: error.message }
   }
 }
 
-// Función para monitorear el estado del pool
-export function monitorPool() {
-  console.log("Estado del pool - Activas:", pool.totalCount, "Inactivas:", pool.idleCount);
-}
-
-// Cerrar el pool de conexiones al finalizar la aplicación
-process.on("SIGINT", async () => {
-  console.log("Cerrando el pool de conexiones...");
-  await pool.end();
-  process.exit(0);
-});
-
-process.on("SIGTERM", async () => {
-  console.log("Cerrando el pool de conexiones...");
-  await pool.end();
-  process.exit(0);
-});
-
-// Exportar el módulo completo
-export default {
-  executeQuery,
-  getClient,
-  executeTransaction,
-  monitorPool,
-};

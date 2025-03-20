@@ -1,12 +1,13 @@
 import type { DashboardStats } from "@/types"
-import { monitorPool } from "./db"
+import { getClient } from "./db"
 
 export async function obtenerEstadisticasDashboard(): Promise<DashboardStats> {
-  const client = await import("./db").then((module) => module.getClient())
+  const client = await getClient()
+
   try {
     // Total de ventas
     const totalVentasResult = await client.query("SELECT COALESCE(SUM(total), 0) as total FROM Ventas")
-    const totalVentas = Number.parseFloat(totalVentasResult.rows[0].total)
+    const totalVentas = Number.parseFloat(totalVentasResult.rows[0].total) || 0
 
     // Total de productos
     const totalProductosResult = await client.query("SELECT COUNT(*) as total FROM Productos")
@@ -68,7 +69,6 @@ export async function obtenerEstadisticasDashboard(): Promise<DashboardStats> {
     throw error
   } finally {
     client.release() // Liberar la conexión de vuelta al pool
-    monitorPool() // Monitorear el estado del pool
   }
 }
 

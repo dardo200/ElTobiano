@@ -3,11 +3,13 @@ import { cookies } from "next/headers"
 
 export async function POST() {
   try {
+    const cookieStore = await cookies()
+
     // Eliminar la cookie de sesión
-    cookies().delete("user_id")
+    cookieStore.delete("user_id")
 
     // Eliminar la cookie de rol
-    cookies().delete("user_role")
+    cookieStore.delete("user_role")
 
     return NextResponse.json({ success: true })
   } catch (error) {

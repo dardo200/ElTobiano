@@ -4,7 +4,8 @@ import { getUserById } from "@/lib/auth-service"
 
 export async function GET() {
   try {
-    const userId = cookies().get("user_id")?.value
+    const cookieStore = await cookies()
+    const userId = cookieStore.get("user_id")?.value
 
     if (!userId) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 })
