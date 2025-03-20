@@ -25,7 +25,10 @@ export async function verificarUsuario(username: string, password: string): Prom
     throw error
   }
 }
-
+export async function getUserById(id: number) {
+  const result = await executeQuery("SELECT id, usuario, rol FROM usuarios WHERE id = $1", [id])
+  return result.rows[0]
+}
 export async function crearUsuario(username: string, password: string, rol: string): Promise<Usuario | null> {
   try {
     // Verificar si el usuario ya existe

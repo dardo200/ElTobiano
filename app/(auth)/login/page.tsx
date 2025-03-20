@@ -4,24 +4,23 @@ import type React from "react"
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Logo } from "@/components/logo"
-import { DeveloperLogo } from "@/components/developer-logo"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { AlertCircle } from "lucide-react"
 
 export default function LoginPage() {
-  const router = useRouter()
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
-  const [connectionStatus, setConnectionStatus] = useState<{ success?: boolean; message?: string }>({})
+  const [loading, setLoading] = useState(false)
+  const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
+    setLoading(true)
     setError("")
 
     try {
@@ -35,38 +34,41 @@ export default function LoginPage() {
 
       const data = await response.json()
 
-      if (response.ok) {
-        router.push("/dashboard")
-      } else {
-        setError(data.error || "Error al iniciar sesión")
+      if (!response.ok) {
+        throw new Error(data.error || "Error al iniciar sesión")
       }
-    } catch (error) {
-      setError("Error al conectar con el servidor")
-      console.error("Error al iniciar sesión:", error)
+
+      // Redirigir según el rol
+      if (data.redirectUrl) {
+        router.push(data.redirectUrl)
+      } else {
+        router.push("/dashboard")
+      }
+    } catch (err: any) {
+      setError(err.message || "Error al iniciar sesión")
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
-
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
-      <div className="w-full max-w-md flex flex-col items-center mb-6">
-        <Logo size="large" className="mb-4" />
-        <h1 className="text-2xl font-bold text-center">Sistema de Gestión de Inventario</h1>
-      </div>
-
-      <Card className="w-[350px]">
-        <CardHeader>
-          <CardTitle>Iniciar Sesión</CardTitle>
+    <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
+      <Card className="w-full max-w-md">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-2xl font-bold">Iniciar sesión</CardTitle>
           <CardDescription>Ingresa tus credenciales para acceder al sistema</CardDescription>
         </CardHeader>
         <CardContent>
+          {error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <label htmlFor="username" className="text-sm font-medium">
-                Usuario
-              </label>
+              <Label htmlFor="username">Usuario</Label>
               <Input
                 id="username"
                 type="text"
@@ -76,9 +78,7 @@ export default function LoginPage() {
               />
             </div>
             <div className="space-y-2">
-              <label htmlFor="password" className="text-sm font-medium">
-                Contraseña
-              </label>
+              <Label htmlFor="password">Contraseña</Label>
               <Input
                 id="password"
                 type="password"
@@ -87,24 +87,15 @@ export default function LoginPage() {
                 required
               />
             </div>
-            {error && <div className="text-sm text-red-500">{error}</div>}
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Cargando...
-                </>
-              ) : (
-                "Iniciar Sesión"
-              )}
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Iniciando sesión..." : "Iniciar sesión"}
             </Button>
           </form>
         </CardContent>
+        <CardFooter className="flex justify-center">
+          <p className="text-sm text-gray-500">Sistema de Gestión de Inventario</p>
+        </CardFooter>
       </Card>
-
-      <div className="mt-8">
-        <DeveloperLogo />
-      </div>
     </div>
   )
 }
