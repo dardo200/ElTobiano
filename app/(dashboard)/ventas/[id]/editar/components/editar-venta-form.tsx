@@ -1,5 +1,9 @@
 "use client"
 
+import { Label } from "@/components/ui/label"
+
+import { Switch } from "@/components/ui/switch"
+
 import type React from "react"
 
 import { useState, useEffect } from "react"
@@ -46,7 +50,7 @@ interface EditarVentaFormProps {
 export const EditarVentaForm: React.FC<EditarVentaFormProps> = ({ venta, clientes, productos, combos }) => {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
-  const [detalles, setDetalles] = useState<Array<DetalleVenta & { es_combo?: boolean }>>([])
+  const [detalles, setDetalles] = useState<Array<DetalleVenta & { es_combo?: boolean; es_mayorista?: boolean }>>([])
   const [showAddProductDialog, setShowAddProductDialog] = useState(false)
   const [showAddComboDialog, setShowAddComboDialog] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
@@ -58,6 +62,7 @@ export const EditarVentaForm: React.FC<EditarVentaFormProps> = ({ venta, cliente
   const [showDeleteAlert, setShowDeleteAlert] = useState(false)
   const [detalleToDelete, setDetalleToDelete] = useState<number | null>(null)
   const [total, setTotal] = useState(venta.total || 0)
+  const [isMayorista, setIsMayorista] = useState(false)
 
   const form = useForm<VentaFormValues>({
     resolver: zodResolver(formSchema),
@@ -70,7 +75,12 @@ export const EditarVentaForm: React.FC<EditarVentaFormProps> = ({ venta, cliente
   useEffect(() => {
     // Inicializar los detalles de la venta
     if (venta.detalles && venta.detalles.length > 0) {
-      setDetalles(venta.detalles)
+      setDetalles(
+        venta.detalles.map((detalle) => ({
+          ...detalle,
+          es_mayorista: detalle.es_mayorista || false,
+        })),
+      )
     }
   }, [venta])
 
@@ -157,6 +167,10 @@ export const EditarVentaForm: React.FC<EditarVentaFormProps> = ({ venta, cliente
   const handleAddProducto = () => {
     if (!selectedProducto) return
 
+    // Usar precio mayorista si está seleccionado, de lo contrario usar precio minorista
+    const precio =
+      isMayorista && selectedProducto.precio_mayorista ? selectedProducto.precio_mayorista : selectedProducto.precio
+
     // Verificar si el producto ya está en la lista
     const existingIndex = detalles.findIndex((d) => d.id_producto === selectedProducto.id && !d.es_combo)
 
@@ -174,8 +188,9 @@ export const EditarVentaForm: React.FC<EditarVentaFormProps> = ({ venta, cliente
           id_venta: venta.id,
           id_producto: selectedProducto.id,
           cantidad: cantidad,
-          precio: selectedProducto.precio,
+          precio: precio,
           es_combo: false,
+          es_mayorista: isMayorista,
           producto: selectedProducto,
         },
       ])
@@ -210,6 +225,7 @@ export const EditarVentaForm: React.FC<EditarVentaFormProps> = ({ venta, cliente
           cantidad: cantidad,
           precio: selectedCombo.precio,
           es_combo: true,
+          es_mayorista: false,
           producto: {
             id: selectedCombo.id,
             nombre: selectedCombo.nombre,
@@ -247,6 +263,10 @@ export const EditarVentaForm: React.FC<EditarVentaFormProps> = ({ venta, cliente
     const newDetalles = detalles.map((d) => (d.id === id ? { ...d, cantidad: newCantidad } : d))
 
     setDetalles(newDetalles)
+  }
+
+  const handleMayoristaChange = (checked: boolean) => {
+    setIsMayorista(checked)
   }
 
   return (
@@ -317,7 +337,15 @@ export const EditarVentaForm: React.FC<EditarVentaFormProps> = ({ venta, cliente
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-medium">Detalles de la venta</h3>
               <div className="space-x-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => setShowAddProductDialog(true)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setShowAddProductDialog(true)
+                    setIsMayorista(false) // Reset mayorista state when opening dialog
+                  }}
+                >
                   <Plus className="h-4 w-4 mr-1" /> Producto
                 </Button>
                 <Button type="button" variant="outline" size="sm" onClick={() => setShowAddComboDialog(true)}>
@@ -340,10 +368,15 @@ export const EditarVentaForm: React.FC<EditarVentaFormProps> = ({ venta, cliente
                               Combo
                             </Badge>
                           )}
+                          {detalle.es_mayorista && (
+                            <Badge variant="outline" className="mr-2">
+                              Mayorista
+                            </Badge>
+                          )}
                           {detalle.producto?.nombre || `Producto #${detalle.id_producto}`}
                         </p>
                       </div>
-                      <p className="text-sm text-muted-foreground">Precio: ${detalle.precio.toFixed(2)}</p>
+                      <p className="text-sm text-muted-foreground">Precio: ${detalle.precio?.toFixed(2) || "0.00"}</p>
                     </div>
                     <div className="flex items-center space-x-2">
                       <div className="flex items-center border rounded-md">
@@ -428,6 +461,11 @@ export const EditarVentaForm: React.FC<EditarVentaFormProps> = ({ venta, cliente
               </Button>
             </div>
 
+            <div className="flex items-center space-x-2 mb-4">
+              <Switch id="precio-mayorista-dialog" checked={isMayorista} onCheckedChange={handleMayoristaChange} />
+              <Label htmlFor="precio-mayorista-dialog">Usar precio mayorista</Label>
+            </div>
+
             <div className="max-h-60 overflow-y-auto border rounded-md">
               {filteredProductos.length === 0 ? (
                 <p className="text-center text-muted-foreground py-4">
@@ -445,7 +483,12 @@ export const EditarVentaForm: React.FC<EditarVentaFormProps> = ({ venta, cliente
                     <p className="font-medium">{producto.nombre}</p>
                     <div className="flex justify-between text-sm text-muted-foreground">
                       <span>Código: {producto.codigo || "N/A"}</span>
-                      <span>Precio: ${producto.precio.toFixed(2)}</span>
+                      <span>
+                        Precio: $
+                        {isMayorista && producto.precio_mayorista
+                          ? producto.precio_mayorista.toFixed(2)
+                          : producto.precio.toFixed(2)}
+                      </span>
                     </div>
                   </div>
                 ))
@@ -458,7 +501,12 @@ export const EditarVentaForm: React.FC<EditarVentaFormProps> = ({ venta, cliente
                   <div className="flex justify-between items-center">
                     <div>
                       <p className="font-medium">{selectedProducto.nombre}</p>
-                      <p className="text-sm text-muted-foreground">Precio: ${selectedProducto.precio.toFixed(2)}</p>
+                      <p className="text-sm text-muted-foreground">
+                        Precio: $
+                        {isMayorista && selectedProducto.precio_mayorista
+                          ? selectedProducto.precio_mayorista.toFixed(2)
+                          : selectedProducto.precio.toFixed(2)}
+                      </p>
                     </div>
                     <div className="flex items-center space-x-2">
                       <Button

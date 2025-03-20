@@ -8,16 +8,30 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     const { estado } = body
 
     if (!estado) {
-      return NextResponse.json({ error: "Estado no proporcionado" }, { status: 400 })
+      return NextResponse.json({ error: "El estado es requerido" }, { status: 400 })
     }
 
-    const venta = await actualizarEstadoVenta(id, estado)
+    try {
+      const venta = await actualizarEstadoVenta(id, estado)
 
-    if (!venta) {
-      return NextResponse.json({ error: "Venta no encontrada" }, { status: 404 })
+      if (!venta) {
+        return NextResponse.json({ error: "Venta no encontrada" }, { status: 404 })
+      }
+
+      return NextResponse.json(venta)
+    } catch (error) {
+      // Verificar si el error es por falta de stock
+      if (error instanceof Error && error.message.includes("Stock insuficiente")) {
+        return NextResponse.json(
+          {
+            error:
+              "No hay stock disponible. Por favor, actualice el stock o realice una compra antes de cambiar el estado.",
+          },
+          { status: 400 },
+        )
+      }
+      throw error
     }
-
-    return NextResponse.json(venta)
   } catch (error) {
     console.error(`Error al actualizar estado de venta con id ${params.id}:`, error)
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })

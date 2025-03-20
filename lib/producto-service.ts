@@ -4,10 +4,8 @@ import type { Producto } from "@/types"
 export async function obtenerProductos(): Promise<Producto[]> {
   try {
     const result = await executeQuery(`
-      SELECT p.*, COALESCE(s.cantidad, 0) as stock 
-      FROM Productos p 
-      LEFT JOIN Stock s ON p.id = s.id_producto
-      ORDER BY p.nombre
+      SELECT * FROM Productos
+      ORDER BY nombre
     `)
     return result.rows
   } catch (error) {
@@ -20,10 +18,8 @@ export async function obtenerProductoPorId(id: number): Promise<Producto | null>
   try {
     const result = await executeQuery(
       `
-      SELECT p.*, COALESCE(s.cantidad, 0) as stock 
-      FROM Productos p 
-      LEFT JOIN Stock s ON p.id = s.id_producto
-      WHERE p.id = $1
+      SELECT * FROM Productos
+      WHERE id = $1
     `,
       [id],
     )
@@ -43,10 +39,8 @@ export async function obtenerProductoPorCodigo(codigo: string): Promise<Producto
   try {
     const result = await executeQuery(
       `
-      SELECT p.*, COALESCE(s.cantidad, 0) as stock 
-      FROM Productos p 
-      LEFT JOIN Stock s ON p.id = s.id_producto
-      WHERE p.codigo = $1
+      SELECT * FROM Productos
+      WHERE codigo = $1
     `,
       [codigo],
     )
@@ -82,21 +76,33 @@ export async function crearProducto(producto: Omit<Producto, "id">): Promise<Pro
 
       // Insertar producto usando el código como ID
       const resultProducto = await client.query(
-        "INSERT INTO Productos (nombre, descripcion, precio, codigo, precio_compra) VALUES ($1, $2, $3, $4, $5) RETURNING *",
-        [producto.nombre, producto.descripcion, producto.precio, producto.codigo, producto.precio_compra || 0],
+        `INSERT INTO Productos (
+          nombre, 
+          descripcion, 
+          precio, 
+          codigo, 
+          precio_compra, 
+          precio_mayorista, 
+          codigo_proveedor,
+          stock
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        [
+          producto.nombre,
+          producto.descripcion,
+          producto.precio,
+          producto.codigo,
+          producto.precio_compra || 0,
+          producto.precio_mayorista || 0,
+          producto.codigo_proveedor || "",
+          producto.stock || 0,
+        ],
       )
 
       const nuevoProducto = resultProducto.rows[0]
 
-      // Insertar stock inicial
-      await client.query("INSERT INTO Stock (id_producto, cantidad) VALUES ($1, $2)", [
-        nuevoProducto.id,
-        producto.stock || 0,
-      ])
-
       await client.query("COMMIT")
 
-      return { ...nuevoProducto, stock: producto.stock || 0 }
+      return nuevoProducto
     } catch (error) {
       await client.query("ROLLBACK")
       throw error
@@ -157,9 +163,27 @@ export async function actualizarProducto(id: number, producto: Partial<Producto>
         paramIndex++
       }
 
+      if (producto.precio_mayorista !== undefined) {
+        updateFields.push(`precio_mayorista = $${paramIndex}`)
+        updateValues.push(producto.precio_mayorista)
+        paramIndex++
+      }
+
+      if (producto.codigo_proveedor !== undefined) {
+        updateFields.push(`codigo_proveedor = $${paramIndex}`)
+        updateValues.push(producto.codigo_proveedor)
+        paramIndex++
+      }
+
       if (producto.codigo !== undefined) {
         updateFields.push(`codigo = $${paramIndex}`)
         updateValues.push(producto.codigo)
+        paramIndex++
+      }
+
+      if (producto.stock !== undefined) {
+        updateFields.push(`stock = $${paramIndex}`)
+        updateValues.push(producto.stock)
         paramIndex++
       }
 
@@ -179,19 +203,10 @@ export async function actualizarProducto(id: number, producto: Partial<Producto>
         return null
       }
 
-      // Actualizar stock si se proporciona
-      if (producto.stock !== undefined) {
-        await client.query(
-          "INSERT INTO Stock (id_producto, cantidad) VALUES ($1, $2) ON CONFLICT (id_producto) DO UPDATE SET cantidad = $2",
-          [id, producto.stock],
-        )
-      }
-
       await client.query("COMMIT")
 
-      // Obtener el producto actualizado con su stock
-      const productoActualizado = await obtenerProductoPorId(id)
-      return productoActualizado
+      // Obtener el producto actualizado
+      return resultProducto.rows[0]
     } catch (error) {
       await client.query("ROLLBACK")
       throw error
@@ -206,14 +221,27 @@ export async function actualizarProducto(id: number, producto: Partial<Producto>
 
 export async function actualizarPrecioCompra(id: number, precio_compra: number): Promise<boolean> {
   try {
-    const result = await executeQuery(
-      "UPDATE Productos SET precio_compra = $1 WHERE id = $2 RETURNING id",
-      [precio_compra, id]
-    );
-    return result.rows.length > 0;
+    const result = await executeQuery("UPDATE Productos SET precio_compra = $1 WHERE id = $2 RETURNING id", [
+      precio_compra,
+      id,
+    ])
+    return result.rows.length > 0
   } catch (error) {
-    console.error(`Error al actualizar precio de compra del producto con id ${id}:`, error);
-    throw error;
+    console.error(`Error al actualizar precio de compra del producto con id ${id}:`, error)
+    throw error
+  }
+}
+
+export async function actualizarStock(id: number, cantidad: number): Promise<boolean> {
+  try {
+    const result = await executeQuery("UPDATE Productos SET stock = stock + $1 WHERE id = $2 RETURNING id", [
+      cantidad,
+      id,
+    ])
+    return result.rows.length > 0
+  } catch (error) {
+    console.error(`Error al actualizar stock del producto con id ${id}:`, error)
+    throw error
   }
 }
 
@@ -231,11 +259,9 @@ export async function buscarProductos(termino: string): Promise<Producto[]> {
   try {
     const result = await executeQuery(
       `
-      SELECT p.*, COALESCE(s.cantidad, 0) as stock 
-      FROM Productos p 
-      LEFT JOIN Stock s ON p.id = s.id_producto
-      WHERE p.nombre ILIKE $1 OR p.descripcion ILIKE $1 OR p.codigo = $2
-      ORDER BY p.nombre
+      SELECT * FROM Productos
+      WHERE nombre ILIKE $1 OR descripcion ILIKE $1 OR codigo = $2 OR codigo_proveedor = $2
+      ORDER BY nombre
     `,
       [`%${termino}%`, termino],
     )
@@ -253,9 +279,8 @@ export async function contarProductosSinStock(): Promise<number> {
     const result = await executeQuery(
       `
       SELECT COUNT(*) as count
-      FROM Productos p
-      LEFT JOIN Stock s ON p.id = s.id_producto
-      WHERE s.cantidad = 0 OR s.cantidad IS NULL
+      FROM Productos
+      WHERE stock = 0 OR stock IS NULL
     `,
     )
     return Number.parseInt(result.rows[0].count)
@@ -269,28 +294,26 @@ export async function contarProductosSinStock(): Promise<number> {
 export async function obtenerProductosStockBajo(limite: number, exacto = false, minimo = 0): Promise<Producto[]> {
   try {
     let query = `
-      SELECT p.*, COALESCE(s.cantidad, 0) as stock 
-      FROM Productos p 
-      LEFT JOIN Stock s ON p.id = s.id_producto
+      SELECT * FROM Productos
     `
 
     const params = []
 
     if (exacto) {
       // Si exacto es true, buscar productos con stock exactamente igual a 'minimo'
-      query += ` WHERE COALESCE(s.cantidad, 0) = $1`
+      query += ` WHERE stock = $1`
       params.push(minimo)
     } else if (minimo > 0) {
       // Si hay un mínimo, buscar productos con stock entre minimo y limite
-      query += ` WHERE COALESCE(s.cantidad, 0) >= $1 AND COALESCE(s.cantidad, 0) < $2`
+      query += ` WHERE stock >= $1 AND stock < $2`
       params.push(minimo, limite)
     } else {
       // Caso normal: buscar productos con stock menor que limite
-      query += ` WHERE COALESCE(s.cantidad, 0) < $1`
+      query += ` WHERE stock < $1`
       params.push(limite)
     }
 
-    query += ` ORDER BY COALESCE(s.cantidad, 0) ASC`
+    query += ` ORDER BY stock ASC`
 
     const result = await executeQuery(query, params)
     return result.rows
@@ -301,7 +324,6 @@ export async function obtenerProductosStockBajo(limite: number, exacto = false, 
 }
 
 // Agregar esta función al archivo existente
-
 export async function verificarCodigoExiste(codigo: string): Promise<boolean> {
   try {
     const result = await executeQuery(
@@ -326,3 +348,4 @@ export async function verificarCodigoExiste(codigo: string): Promise<boolean> {
     throw error
   }
 }
+

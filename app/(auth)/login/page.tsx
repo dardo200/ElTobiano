@@ -8,6 +8,8 @@ import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Logo } from "@/components/logo"
+import { DeveloperLogo } from "@/components/developer-logo"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -46,33 +48,14 @@ export default function LoginPage() {
     }
   }
 
-  const handleTestConnection = async () => {
-    setConnectionStatus({ message: "Probando conexión..." })
-    try {
-      const response = await fetch("/api/db/test")
-      const result = await response.json()
-      if (result.success) {
-        setConnectionStatus({
-          success: true,
-          message: `Conexión exitosa! Timestamp del servidor: ${new Date(result.timestamp).toLocaleString()}`,
-        })
-      } else {
-        setConnectionStatus({
-          success: false,
-          message: `Error de conexión: ${result.error}`,
-        })
-      }
-    } catch (error) {
-      setConnectionStatus({
-        success: false,
-        message: `Error inesperado: ${error.message}`,
-      })
-    }
-  }
-  
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
+      <div className="w-full max-w-md flex flex-col items-center mb-6">
+        <Logo size="large" className="mb-4" />
+        <h1 className="text-2xl font-bold text-center">Sistema de Gestión de Inventario</h1>
+      </div>
+
       <Card className="w-[350px]">
         <CardHeader>
           <CardTitle>Iniciar Sesión</CardTitle>
@@ -117,17 +100,11 @@ export default function LoginPage() {
             </Button>
           </form>
         </CardContent>
-        <CardFooter className="flex flex-col items-center">
-          <Button variant="outline" className="w-full" onClick={handleTestConnection}>
-            Probar Conexión a BD
-          </Button>
-          {connectionStatus.message && (
-            <div className={`mt-2 text-sm ${connectionStatus.success ? "text-green-500" : "text-red-500"}`}>
-              {connectionStatus.message}
-            </div>
-          )}
-        </CardFooter>
       </Card>
+
+      <div className="mt-8">
+        <DeveloperLogo />
+      </div>
     </div>
   )
 }

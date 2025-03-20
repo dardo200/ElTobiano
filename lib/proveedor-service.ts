@@ -29,8 +29,8 @@ export async function obtenerProveedorPorId(id: number): Promise<Proveedor | nul
 export async function crearProveedor(proveedor: Omit<Proveedor, "id">): Promise<Proveedor> {
   try {
     const result = await executeQuery(
-      "INSERT INTO Proveedor (nombre, telefono, email, direccion) VALUES ($1, $2, $3, $4) RETURNING *",
-      [proveedor.nombre, proveedor.telefono, proveedor.email, proveedor.direccion],
+      "INSERT INTO Proveedor (nombre, telefono, email, direccion, envio) VALUES ($1, $2, $3, $4, $5) RETURNING *",
+      [proveedor.nombre, proveedor.telefono, proveedor.email, proveedor.direccion, proveedor.envio || 0],
     )
 
     return result.rows[0]
@@ -67,6 +67,12 @@ export async function actualizarProveedor(id: number, proveedor: Partial<Proveed
     if (proveedor.direccion !== undefined) {
       updateFields.push(`direccion = $${paramIndex}`)
       updateValues.push(proveedor.direccion)
+      paramIndex++
+    }
+
+    if (proveedor.envio !== undefined) {
+      updateFields.push(`envio = $${paramIndex}`)
+      updateValues.push(proveedor.envio)
       paramIndex++
     }
 

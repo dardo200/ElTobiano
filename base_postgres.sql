@@ -152,3 +152,14 @@ DROP TRIGGER IF EXISTS validate_detalle_venta_reference_trigger ON DetalleVentas
 CREATE TRIGGER validate_detalle_venta_reference_trigger
 BEFORE INSERT OR UPDATE ON DetalleVentas
 FOR EACH ROW EXECUTE FUNCTION validate_detalle_venta_reference();
+
+
+
+INSERT INTO usuarios (usuario, password,   rol)
+VALUES ('despacho', '$2b$10$zrsQMbH9MrWizGvN1uoKGOV1CVwQcJaAw8IAnjK3M4.WSjzn1V9Mu', 'despacho')
+ON CONFLICT (usuario) DO NOTHING;
+
+-- Crear usuario con rol administracion
+INSERT INTO usuarios (usuario, password, rol)
+VALUES ('administracion', '$2b$10$kE.zqrJ8r/czRADHSLQanePVnVizi.n8JdAyRTsasf/g22/16AZt.', 'administracion')
+ON CONFLICT (usuario) DO NOTHING;

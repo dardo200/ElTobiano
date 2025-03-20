@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -19,6 +19,7 @@ import { toast } from "@/components/ui/use-toast"
 const formSchema = z.object({
   id_proveedor: z.string().min(1, "El proveedor es requerido"),
   fecha: z.string().min(1, "La fecha es requerida"),
+  costo_envio: z.coerce.number().min(0, "El costo de envío no puede ser negativo"),
 })
 
 type CompraFormValues = z.infer<typeof formSchema>
@@ -31,14 +32,28 @@ interface EditarCompraFormProps {
 export const EditarCompraForm: React.FC<EditarCompraFormProps> = ({ compra, proveedores }) => {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
+  const [selectedProveedor, setSelectedProveedor] = useState<Proveedor | null>(null)
 
   const form = useForm<CompraFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       id_proveedor: compra.id_proveedor.toString(),
       fecha: new Date(compra.fecha).toISOString().split("T")[0],
+      costo_envio: compra.costo_envio || 0,
     },
   })
+
+  const watchIdProveedor = form.watch("id_proveedor")
+
+  // Actualizar el proveedor seleccionado cuando cambia el id_proveedor
+  useEffect(() => {
+    if (watchIdProveedor) {
+      const proveedor = proveedores.find((p) => p.id.toString() === watchIdProveedor)
+      setSelectedProveedor(proveedor || null)
+    } else {
+      setSelectedProveedor(null)
+    }
+  }, [watchIdProveedor, proveedores])
 
   const onSubmit = async (data: CompraFormValues) => {
     setIsLoading(true)
@@ -51,6 +66,7 @@ export const EditarCompraForm: React.FC<EditarCompraFormProps> = ({ compra, prov
         body: JSON.stringify({
           id_proveedor: Number.parseInt(data.id_proveedor),
           fecha: new Date(data.fecha).toISOString(),
+          costo_envio: data.costo_envio,
         }),
       })
 
@@ -74,7 +90,7 @@ export const EditarCompraForm: React.FC<EditarCompraFormProps> = ({ compra, prov
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 w-full">
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
           <FormField
             control={form.control}
             name="id_proveedor"
@@ -117,6 +133,24 @@ export const EditarCompraForm: React.FC<EditarCompraFormProps> = ({ compra, prov
               </FormItem>
             )}
           />
+          <FormField
+            control={form.control}
+            name="costo_envio"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Costo de Envío</FormLabel>
+                <FormControl>
+                  <Input type="number" step="0.01" min="0" disabled={isLoading} {...field} />
+                </FormControl>
+                {selectedProveedor && (
+                  <p className="text-sm text-muted-foreground">
+                    Costo de envío predeterminado del proveedor: ${selectedProveedor.envio?.toFixed(2) || "0.00"}
+                  </p>
+                )}
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         </div>
 
         <div className="bg-muted p-4 rounded-md">
@@ -128,9 +162,12 @@ export const EditarCompraForm: React.FC<EditarCompraFormProps> = ({ compra, prov
                   <p className="font-medium">{detalle.producto?.nombre || `Producto #${detalle.id_producto}`}</p>
                   <p className="text-sm text-muted-foreground">
                     Cantidad: {detalle.cantidad} x ${detalle.precio.toFixed(2)}
+                    {detalle.iva_porcentaje !== undefined && ` + IVA ${detalle.iva_porcentaje}%`}
                   </p>
                 </div>
-                <p className="font-bold">${(detalle.cantidad * detalle.precio).toFixed(2)}</p>
+                <p className="font-bold">
+                  ${((detalle.precio_con_iva || detalle.precio) * detalle.cantidad).toFixed(2)}
+                </p>
               </div>
             ))}
           </div>

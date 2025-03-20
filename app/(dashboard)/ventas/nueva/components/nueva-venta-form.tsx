@@ -15,6 +15,8 @@ import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 import type { Cliente, Producto, Combo } from "@/types"
 import { toast } from "@/components/ui/use-toast"
 
@@ -28,6 +30,7 @@ const formSchema = z.object({
         precio: z.coerce.number().min(0, "Precio debe ser mayor o igual a 0"),
         es_combo: z.boolean().default(false),
         tipo: z.enum(["producto", "combo"]).default("producto"),
+        es_mayorista: z.boolean().default(false),
       }),
     )
     .min(1, "Debe agregar al menos un producto"),
@@ -46,6 +49,7 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
   const [combos, setCombos] = useState<Combo[]>([])
   const [searchCode, setSearchCode] = useState("")
   const [activeTabsState, setActiveTabsState] = useState<Record<number, "producto" | "combo">>({})
+  const [isMayorista, setIsMayorista] = useState(false)
 
   useEffect(() => {
     const fetchCombos = async () => {
@@ -76,6 +80,7 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
           precio: 0,
           es_combo: false,
           tipo: "producto",
+          es_mayorista: false,
         },
       ],
     },
@@ -100,9 +105,12 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
     if (tipo === "producto") {
       const producto = productos.find((p) => p.id.toString() === id_producto)
       if (producto) {
-        form.setValue(`detalles.${index}.precio`, producto.precio)
+        // Usar precio mayorista si está seleccionado, de lo contrario usar precio minorista
+        const precio = isMayorista && producto.precio_mayorista ? producto.precio_mayorista : producto.precio
+        form.setValue(`detalles.${index}.precio`, precio)
         form.setValue(`detalles.${index}.es_combo`, false)
         form.setValue(`detalles.${index}.tipo`, "producto")
+        form.setValue(`detalles.${index}.es_mayorista`, isMayorista)
       }
     } else {
       const combo = combos.find((c) => c.id.toString() === id_producto)
@@ -110,6 +118,7 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
         form.setValue(`detalles.${index}.precio`, combo.precio_venta)
         form.setValue(`detalles.${index}.es_combo`, true)
         form.setValue(`detalles.${index}.tipo`, "combo")
+        form.setValue(`detalles.${index}.es_mayorista`, false)
       }
     }
   }
@@ -120,10 +129,17 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
       // Primero buscar en productos
       const producto = productos.find((p) => p.codigo === barcodeInput || p.id.toString() === barcodeInput)
       if (producto) {
+        // Usar precio mayorista si está seleccionado, de lo contrario usar precio minorista
+        const precio = isMayorista && producto.precio_mayorista ? producto.precio_mayorista : producto.precio
         form.setValue(`detalles.${index}.id_producto`, producto.id.toString())
-        form.setValue(`detalles.${index}.precio`, producto.precio)
+        form.setValue(
+          `detalles.${index}.precio  producto.id.toString())
+        form.setValue(\`detalles.${index}.precio`,
+          precio,
+        )
         form.setValue(`detalles.${index}.es_combo`, false)
         form.setValue(`detalles.${index}.tipo`, "producto")
+        form.setValue(`detalles.${index}.es_mayorista`, isMayorista)
         setActiveTabsState({ ...activeTabsState, [index]: "producto" })
         toast.success(`Producto escaneado: ${producto.nombre}`)
         return
@@ -136,6 +152,7 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
         form.setValue(`detalles.${index}.precio`, combo.precio_venta)
         form.setValue(`detalles.${index}.es_combo`, true)
         form.setValue(`detalles.${index}.tipo`, "combo")
+        form.setValue(`detalles.${index}.es_mayorista`, false)
         setActiveTabsState({ ...activeTabsState, [index]: "combo" })
         toast.success(`Combo escaneado: ${combo.nombre}`)
         return
@@ -154,13 +171,16 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
       if (productoResponse.ok) {
         const producto = await productoResponse.json()
         if (producto) {
+          // Usar precio mayorista si está seleccionado, de lo contrario usar precio minorista
+          const precio = isMayorista && producto.precio_mayorista ? producto.precio_mayorista : producto.precio
           // Agregar producto a la lista
           append({
             id_producto: producto.id.toString(),
             cantidad: 1,
-            precio: producto.precio,
+            precio: precio,
             es_combo: false,
             tipo: "producto",
+            es_mayorista: isMayorista,
           })
           setSearchCode("")
           toast.success(`Producto agregado: ${producto.nombre}`)
@@ -180,6 +200,7 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
             precio: combo.precio_venta,
             es_combo: true,
             tipo: "combo",
+            es_mayorista: false,
           })
           setSearchCode("")
           toast.success(`Combo agregado: ${combo.nombre}`)
@@ -212,6 +233,7 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
           cantidad: detalle.cantidad,
           precio: detalle.precio,
           es_combo: detalle.es_combo,
+          es_mayorista: detalle.es_mayorista,
         })),
       }
 
@@ -256,6 +278,23 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
     // Actualizar el tipo y es_combo según la pestaña seleccionada
     form.setValue(`detalles.${index}.tipo`, value)
     form.setValue(`detalles.${index}.es_combo`, value === "combo")
+    form.setValue(`detalles.${index}.es_mayorista`, value === "producto" ? isMayorista : false)
+  }
+
+  const handleMayoristaChange = (checked: boolean) => {
+    setIsMayorista(checked)
+
+    // Actualizar los precios de los productos ya seleccionados
+    watchDetalles.forEach((detalle, index) => {
+      if (detalle.tipo === "producto" && detalle.id_producto) {
+        const producto = productos.find((p) => p.id.toString() === detalle.id_producto)
+        if (producto) {
+          const precio = checked && producto.precio_mayorista ? producto.precio_mayorista : producto.precio
+          form.setValue(`detalles.${index}.precio`, precio)
+          form.setValue(`detalles.${index}.es_mayorista`, checked)
+        }
+      }
+    })
   }
 
   return (
@@ -292,6 +331,10 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
               </FormItem>
             )}
           />
+          <div className="flex items-center space-x-2">
+            <Switch id="precio-mayorista" checked={isMayorista} onCheckedChange={handleMayoristaChange} />
+            <Label htmlFor="precio-mayorista">Usar precios mayoristas</Label>
+          </div>
         </div>
 
         <div className="flex items-center gap-2 mb-4">
@@ -350,8 +393,11 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
                                     <SelectContent>
                                       {productos.map((producto) => (
                                         <SelectItem key={producto.id} value={producto.id.toString()}>
-                                          {producto.nombre} - ${producto.precio.toFixed(2)} - Stock:{" "}
-                                          {producto.stock || 0}
+                                          {producto.nombre} - $
+                                          {isMayorista && producto.precio_mayorista
+                                            ? producto.precio_mayorista.toFixed(2)
+                                            : producto.precio.toFixed(2)}{" "}
+                                          - Stock: {producto.stock || 0}
                                         </SelectItem>
                                       ))}
                                     </SelectContent>
@@ -461,6 +507,7 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
                 precio: 0,
                 es_combo: false,
                 tipo: "producto",
+                es_mayorista: isMayorista,
               })
             }
             disabled={isLoading}

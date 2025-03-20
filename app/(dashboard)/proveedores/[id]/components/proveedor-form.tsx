@@ -21,6 +21,7 @@ const formSchema = z.object({
   email: z.string().email("Email inválido").optional().or(z.literal("")),
   telefono: z.string().optional(),
   direccion: z.string().optional(),
+  envio: z.coerce.number().min(0, "El precio de envío no puede ser negativo").optional(),
 })
 
 type ProveedorFormValues = z.infer<typeof formSchema>
@@ -40,6 +41,7 @@ export const ProveedorForm: React.FC<ProveedorFormProps> = ({ initialData }) => 
       email: "",
       telefono: "",
       direccion: "",
+      envio: 0,
     },
   })
 
@@ -121,6 +123,26 @@ export const ProveedorForm: React.FC<ProveedorFormProps> = ({ initialData }) => 
                   <Input
                     disabled={isLoading}
                     placeholder="Teléfono del proveedor"
+                    {...field}
+                    value={field.value || ""}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="envio"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Precio de Envío</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    disabled={isLoading}
+                    placeholder="Precio de envío"
                     {...field}
                     value={field.value || ""}
                   />

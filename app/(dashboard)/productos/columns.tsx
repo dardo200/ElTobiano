@@ -51,24 +51,31 @@ export const columns: ColumnDef<Producto>[] = [
   },
   {
     accessorKey: "codigo",
-    header: "Código",
+    header: () => <div className="text-left">Código</div>,
     cell: ({ row }) => <div className="font-mono">{row.getValue("codigo") || "N/A"}</div>,
+  },
+  {
+    accessorKey: "codigo_proveedor",
+    header: () => <div className="text-left">Código Proveedor</div>,
+    cell: ({ row }) => <div className="font-mono">{row.getValue("codigo_proveedor") || "N/A"}</div>,
   },
   {
     accessorKey: "nombre",
     header: ({ column }) => {
       return (
-        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-          Nombre
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
+        <div className="text-left">
+          <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+            Nombre
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        </div>
       )
     },
     cell: ({ row }) => <div className="font-medium">{row.getValue("nombre")}</div>,
   },
   {
     accessorKey: "descripcion",
-    header: "Descripción",
+    header: () => <div className="text-left">Descripción</div>,
     cell: ({ row }) => {
       const descripcion = row.getValue("descripcion") as string
       return <div className="truncate max-w-[300px]">{descripcion || "Sin descripción"}</div>
@@ -83,6 +90,19 @@ export const columns: ColumnDef<Producto>[] = [
         style: "currency",
         currency: "ARS",
       }).format(precio)
+
+      return <div className="text-right font-medium">{formatted}</div>
+    },
+  },
+  {
+    accessorKey: "precio_mayorista",
+    header: () => <div className="text-right">Precio Mayorista</div>,
+    cell: ({ row }) => {
+      const precio_mayorista = Number.parseFloat(row.getValue("precio_mayorista") || 0)
+      const formatted = new Intl.NumberFormat("es-AR", {
+        style: "currency",
+        currency: "ARS",
+      }).format(precio_mayorista)
 
       return <div className="text-right font-medium">{formatted}</div>
     },
@@ -133,6 +153,7 @@ export const columns: ColumnDef<Producto>[] = [
   },
   {
     id: "actions",
+    header: () => <div className="text-center">Acciones</div>,
     cell: ({ row, table }) => {
       const router = useRouter()
       const producto = row.original
@@ -159,45 +180,47 @@ export const columns: ColumnDef<Producto>[] = [
       }
 
       return (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
-              <span className="sr-only">Abrir menú</span>
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-            <DropdownMenuItem onClick={() => router.push(`/productos/${producto.id}`)}>
-              <Edit className="mr-2 h-4 w-4" />
-              Editar
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                  <Trash className="mr-2 h-4 w-4" />
-                  Eliminar
-                </DropdownMenuItem>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Esta acción no se puede deshacer. Esto eliminará permanentemente el producto{" "}
-                    <span className="font-bold">{producto.nombre}</span> y lo quitará del sistema.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDelete} disabled={isDeleting}>
-                    {isDeleting ? "Eliminando..." : "Eliminar"}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="text-center">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0">
+                <span className="sr-only">Abrir menú</span>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => router.push(`/productos/${producto.id}`)}>
+                <Edit className="mr-2 h-4 w-4" />
+                Editar
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                    <Trash className="mr-2 h-4 w-4" />
+                    Eliminar
+                  </DropdownMenuItem>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Esta acción no se puede deshacer. Esto eliminará permanentemente el producto{" "}
+                      <span className="font-bold">{producto.nombre}</span> y lo quitará del sistema.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDelete} disabled={isDeleting}>
+                      {isDeleting ? "Eliminando..." : "Eliminar"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       )
     },
   },

@@ -23,84 +23,88 @@ export async function obtenerVentas(): Promise<Venta[]> {
 }
 
 export async function obtenerVentaPorId(id: number): Promise<Venta | null> {
-  const client = await import("./db").then((module) => module.getClient())
   try {
-    // Obtener la venta
-    const ventaResult = await client.query(
-      `
-      SELECT v.*, c.nombre as cliente_nombre, c.email, c.telefono, c.direccion
-      FROM Ventas v
-      LEFT JOIN Clientes c ON v.id_cliente = c.id
-      WHERE v.id = $1
-    `,
-      [id],
-    )
+    const client = await import("./db").then((module) => module.getClient())
+    
 
-    if (ventaResult.rows.length === 0) {
-      return null
-    }
+    try {
+      // Obtener la venta
+      const ventaResult = await client.query(
+        `
+        SELECT v.*, c.nombre as cliente_nombre, c.email, c.telefono, c.direccion
+        FROM Ventas v
+        LEFT JOIN Clientes c ON v.id_cliente = c.id
+        WHERE v.id = $1
+      `,
+        [id],
+      )
 
-    const venta = ventaResult.rows[0]
+      if (ventaResult.rows.length === 0) {
+        return null
+      }
 
-    // Obtener los detalles de la venta
-    const detallesResult = await client.query(
-      `
-      SELECT 
-        dv.*, 
-        CASE 
-          WHEN dv.es_combo = false THEN p.nombre 
-          WHEN dv.es_combo = true THEN cb.nombre 
-          ELSE NULL 
-        END as producto_nombre,
-        CASE 
-          WHEN dv.es_combo = false THEN p.descripcion 
-          WHEN dv.es_combo = true THEN cb.descripcion 
-          ELSE NULL 
-        END as producto_descripcion,
-        CASE 
-          WHEN dv.es_combo = false THEN p.codigo 
-          WHEN dv.es_combo = true THEN cb.codigo 
-          ELSE NULL 
-        END as producto_codigo
-      FROM DetalleVentas dv
-      LEFT JOIN Productos p ON dv.id_producto = p.id AND dv.es_combo = false
-      LEFT JOIN Combos cb ON dv.id_producto = cb.id AND dv.es_combo = true
-      WHERE dv.id_venta = $1
-    `,
-      [id],
-    )
+      const venta = ventaResult.rows[0]
 
-    const detalles = detallesResult.rows.map((row) => ({
-      ...row,
-      producto: row.producto_nombre
-        ? {
-            id: row.id_producto,
-            nombre: row.producto_nombre,
-            descripcion: row.producto_descripcion,
-            precio: row.precio,
-            codigo: row.producto_codigo,
-          }
-        : undefined,
-    }))
+      // Obtener los detalles de la venta
+      const detallesResult = await client.query(
+        `
+        SELECT 
+          dv.*, 
+          CASE 
+            WHEN dv.es_combo = false THEN p.nombre 
+            WHEN dv.es_combo = true THEN cb.nombre 
+            ELSE NULL 
+          END as producto_nombre,
+          CASE 
+            WHEN dv.es_combo = false THEN p.descripcion 
+            WHEN dv.es_combo = true THEN cb.descripcion 
+            ELSE NULL 
+          END as producto_descripcion,
+          CASE 
+            WHEN dv.es_combo = false THEN p.codigo 
+            WHEN dv.es_combo = true THEN cb.codigo 
+            ELSE NULL 
+          END as producto_codigo
+        FROM DetalleVentas dv
+        LEFT JOIN Productos p ON dv.id_producto = p.id AND dv.es_combo = false
+        LEFT JOIN Combos cb ON dv.id_producto = cb.id AND dv.es_combo = true
+        WHERE dv.id_venta = $1
+      `,
+        [id],
+      )
 
-    return {
-      ...venta,
-      cliente: venta.cliente_nombre
-        ? {
-            id: venta.id_cliente,
-            nombre: venta.cliente_nombre,
-            email: venta.email,
-            telefono: venta.telefono,
-            direccion: venta.direccion,
-          }
-        : undefined,
-      detalles,
+      const detalles = detallesResult.rows.map((row) => ({
+        ...row,
+        producto: row.producto_nombre
+          ? {
+              id: row.id_producto,
+              nombre: row.producto_nombre,
+              descripcion: row.producto_descripcion,
+              precio: row.precio,
+              codigo: row.producto_codigo,
+            }
+          : undefined,
+      }))
+
+      return {
+        ...venta,
+        cliente: venta.cliente_nombre
+          ? {
+              id: venta.id_cliente,
+              nombre: venta.cliente_nombre,
+              email: venta.email,
+              telefono: venta.telefono,
+              direccion: venta.direccion,
+            }
+          : undefined,
+        detalles,
+      }
+    } finally {
+      await client.end()
     }
   } catch (error) {
-    console.error("Error al obtener venta:", error)
+    console.error(`Error al obtener venta con id ${id}:`, error)
     throw error
-  } finally {
-    client.release() // Liberar la conexión de vuelta al pool
   }
 }
 
@@ -127,15 +131,13 @@ export async function crearVenta(
 
         if (!detalle.es_combo) {
           // Verificar stock para productos normales
-          const stockResult = await client.query("SELECT cantidad FROM Stock WHERE id_producto = $1", [
-            detalle.id_producto,
-          ])
+          const stockResult = await client.query("SELECT stock FROM Productos WHERE id = $1", [detalle.id_producto])
 
           if (stockResult.rows.length === 0) {
-            throw new Error(`El producto con ID ${detalle.id_producto} no existe en el stock`)
+            throw new Error(`El producto con ID ${detalle.id_producto} no existe`)
           }
 
-          const stockActual = stockResult.rows[0].cantidad
+          const stockActual = stockResult.rows[0].stock
           // Verificar si hay stock suficiente, pero permitir continuar si no lo hay
           if (stockActual < detalle.cantidad) {
             hayStockSuficiente = false
@@ -153,7 +155,7 @@ export async function crearVenta(
 
           // Verificar stock para cada producto del combo
           const comboDetallesResult = await client.query(
-            `SELECT dc.id_producto, dc.cantidad, p.nombre
+            `SELECT dc.id_producto, dc.cantidad, p.nombre, p.stock
              FROM DetalleCombos dc
              JOIN Productos p ON dc.id_producto = p.id
              WHERE dc.id_combo = $1`,
@@ -161,17 +163,7 @@ export async function crearVenta(
           )
 
           for (const comboDetalle of comboDetallesResult.rows) {
-            const stockResult = await client.query("SELECT cantidad FROM Stock WHERE id_producto = $1", [
-              comboDetalle.id_producto,
-            ])
-
-            if (stockResult.rows.length === 0) {
-              throw new Error(
-                `El producto "${comboDetalle.nombre}" (ID: ${comboDetalle.id_producto}) del combo no existe en el stock`,
-              )
-            }
-
-            const stockActual = stockResult.rows[0].cantidad
+            const stockActual = comboDetalle.stock
             const cantidadNecesaria = comboDetalle.cantidad * detalle.cantidad
 
             // Verificar si hay stock suficiente, pero permitir continuar si no lo hay
@@ -217,51 +209,54 @@ export async function crearVenta(
           if (comboCheck.rows.length === 0) {
             throw new Error(`El combo con ID ${detalle.id_producto} no existe`)
           }
+
+          // Primero, eliminar la restricción de clave foránea si existe
+          try {
+            await client.query(`
+              ALTER TABLE DetalleVentas 
+              DROP CONSTRAINT IF EXISTS detalleventas_id_producto_fkey
+            `)
+          } catch (error) {
+            console.error("Error al eliminar la restricción de clave foránea:", error)
+            // Continuar incluso si hay un error, ya que la restricción podría no existir
+          }
+
+          // Insertar el detalle de venta con el combo
+          await client.query(
+            "INSERT INTO DetalleVentas (id_venta, id_producto, cantidad, precio, es_combo) VALUES ($1, $2, $3, $4, $5)",
+            [nuevaVenta.id, detalle.id_producto, detalle.cantidad, detalle.precio, true],
+          )
+
+          // Si es un combo, obtener los productos del combo y actualizar el stock
+          const comboDetallesResult = await client.query(
+            "SELECT id_producto, cantidad FROM DetalleCombos WHERE id_combo = $1",
+            [detalle.id_producto],
+          )
+
+          for (const comboDetalle of comboDetallesResult.rows) {
+            await client.query("UPDATE Productos SET stock = stock - $1 WHERE id = $2", [
+              comboDetalle.cantidad * detalle.cantidad,
+              comboDetalle.id_producto,
+            ])
+          }
         } else {
           // Verificar que el producto exista
           const productoCheck = await client.query("SELECT id FROM Productos WHERE id = $1", [detalle.id_producto])
           if (productoCheck.rows.length === 0) {
             throw new Error(`El producto con ID ${detalle.id_producto} no existe`)
           }
-        }
 
-        await client.query(
-          "INSERT INTO DetalleVentas (id_venta, id_producto, cantidad, precio, es_combo) VALUES ($1, $2, $3, $4, $5)",
-          [nuevaVenta.id, detalle.id_producto, detalle.cantidad, detalle.precio, detalle.es_combo || false],
-        )
-
-        // Si no es un combo, actualizar el stock
-        if (!detalle.es_combo) {
-          // Actualizar el stock
+          // Insertar el detalle de venta con el producto
           await client.query(
-            `
-            UPDATE Stock 
-            SET cantidad = cantidad - $1 
-            WHERE id_producto = $2
-          `,
-            [detalle.cantidad, detalle.id_producto],
-          )
-        } else {
-          // Si es un combo, obtener los productos del combo y actualizar el stock
-          const comboDetallesResult = await client.query(
-            `
-            SELECT dc.id_producto, dc.cantidad
-            FROM DetalleCombos dc
-            WHERE dc.id_combo = $1
-          `,
-            [detalle.id_producto],
+            "INSERT INTO DetalleVentas (id_venta, id_producto, cantidad, precio, es_combo) VALUES ($1, $2, $3, $4, $5)",
+            [nuevaVenta.id, detalle.id_producto, detalle.cantidad, detalle.precio, false],
           )
 
-          for (const comboDetalle of comboDetallesResult.rows) {
-            await client.query(
-              `
-              UPDATE Stock 
-              SET cantidad = cantidad - $1 
-              WHERE id_producto = $2
-            `,
-              [comboDetalle.cantidad * detalle.cantidad, comboDetalle.id_producto],
-            )
-          }
+          // Actualizar el stock directamente en la tabla Productos
+          await client.query("UPDATE Productos SET stock = stock - $1 WHERE id = $2", [
+            detalle.cantidad,
+            detalle.id_producto,
+          ])
         }
       }
 
@@ -301,15 +296,13 @@ export async function actualizarEstadoVenta(id: number, estado: string): Promise
         for (const detalle of detallesResult.rows) {
           if (!detalle.es_combo) {
             // Verificar stock para productos normales
-            const stockResult = await client.query("SELECT cantidad FROM Stock WHERE id_producto = $1", [
-              detalle.id_producto,
-            ])
+            const stockResult = await client.query("SELECT stock FROM Productos WHERE id = $1", [detalle.id_producto])
 
             if (stockResult.rows.length === 0) {
-              throw new Error(`El producto con ID ${detalle.id_producto} no existe en el stock`)
+              throw new Error(`El producto con ID ${detalle.id_producto} no existe`)
             }
 
-            const stockActual = stockResult.rows[0].cantidad
+            const stockActual = stockResult.rows[0].stock
             if (stockActual < detalle.cantidad) {
               throw new Error(
                 `Stock insuficiente para el producto con ID ${detalle.id_producto}. Disponible: ${stockActual}, Solicitado: ${detalle.cantidad}`,
@@ -318,7 +311,7 @@ export async function actualizarEstadoVenta(id: number, estado: string): Promise
           } else {
             // Verificar stock para cada producto del combo
             const comboDetallesResult = await client.query(
-              `SELECT dc.id_producto, dc.cantidad, p.nombre
+              `SELECT dc.id_producto, dc.cantidad, p.nombre, p.stock
                FROM DetalleCombos dc
                JOIN Productos p ON dc.id_producto = p.id
                WHERE dc.id_combo = $1`,
@@ -326,17 +319,7 @@ export async function actualizarEstadoVenta(id: number, estado: string): Promise
             )
 
             for (const comboDetalle of comboDetallesResult.rows) {
-              const stockResult = await client.query("SELECT cantidad FROM Stock WHERE id_producto = $1", [
-                comboDetalle.id_producto,
-              ])
-
-              if (stockResult.rows.length === 0) {
-                throw new Error(
-                  `El producto "${comboDetalle.nombre}" (ID: ${comboDetalle.id_producto}) del combo no existe en el stock`,
-                )
-              }
-
-              const stockActual = stockResult.rows[0].cantidad
+              const stockActual = comboDetalle.stock
               const cantidadNecesaria = comboDetalle.cantidad * detalle.cantidad
 
               if (stockActual < cantidadNecesaria) {
@@ -508,8 +491,8 @@ export async function eliminarVenta(id: number): Promise<boolean> {
       // Restaurar el stock de los productos
       for (const detalle of detallesResult.rows) {
         if (!detalle.es_combo) {
-          // Si es un producto normal, restaurar su stock
-          await client.query("UPDATE Stock SET cantidad = cantidad + $1 WHERE id_producto = $2", [
+          // Si es un producto normal, restaurar su stock directamente en la tabla Productos
+          await client.query("UPDATE Productos SET stock = stock + $1 WHERE id = $2", [
             detalle.cantidad,
             detalle.id_producto,
           ])
@@ -521,7 +504,7 @@ export async function eliminarVenta(id: number): Promise<boolean> {
           )
 
           for (const comboDetalle of comboDetallesResult.rows) {
-            await client.query("UPDATE Stock SET cantidad = cantidad + $1 WHERE id_producto = $2", [
+            await client.query("UPDATE Productos SET stock = stock + $1 WHERE id = $2", [
               comboDetalle.cantidad * detalle.cantidad,
               comboDetalle.id_producto,
             ])
@@ -569,8 +552,8 @@ export async function actualizarDetallesVenta(
       // Restaurar el stock de los productos actuales
       for (const detalle of detallesActualesResult.rows) {
         if (!detalle.es_combo) {
-          // Si es un producto normal, restaurar su stock
-          await client.query("UPDATE Stock SET cantidad = cantidad + $1 WHERE id_producto = $2", [
+          // Si es un producto normal, restaurar su stock directamente en la tabla Productos
+          await client.query("UPDATE Productos SET stock = stock + $1 WHERE id = $2", [
             detalle.cantidad,
             detalle.id_producto,
           ])
@@ -582,7 +565,7 @@ export async function actualizarDetallesVenta(
           )
 
           for (const comboDetalle of comboDetallesResult.rows) {
-            await client.query("UPDATE Stock SET cantidad = cantidad + $1 WHERE id_producto = $2", [
+            await client.query("UPDATE Productos SET stock = stock + $1 WHERE id = $2", [
               comboDetalle.cantidad * detalle.cantidad,
               comboDetalle.id_producto,
             ])
@@ -593,6 +576,17 @@ export async function actualizarDetallesVenta(
       // Eliminar todos los detalles actuales
       await client.query("DELETE FROM DetalleVentas WHERE id_venta = $1", [id])
 
+      // Primero, eliminar la restricción de clave foránea si existe
+      try {
+        await client.query(`
+          ALTER TABLE DetalleVentas 
+          DROP CONSTRAINT IF EXISTS detalleventas_id_producto_fkey
+        `)
+      } catch (error) {
+        console.error("Error al eliminar la restricción de clave foránea:", error)
+        // Continuar incluso si hay un error, ya que la restricción podría no existir
+      }
+
       // Insertar los nuevos detalles
       for (const detalle of detalles) {
         // Verificar si es un combo antes de insertar
@@ -602,27 +596,13 @@ export async function actualizarDetallesVenta(
           if (comboCheck.rows.length === 0) {
             throw new Error(`El combo con ID ${detalle.id_producto} no existe`)
           }
-        } else {
-          // Verificar que el producto exista
-          const productoCheck = await client.query("SELECT id FROM Productos WHERE id = $1", [detalle.id_producto])
-          if (productoCheck.rows.length === 0) {
-            throw new Error(`El producto con ID ${detalle.id_producto} no existe`)
-          }
-        }
 
-        await client.query(
-          "INSERT INTO DetalleVentas (id_venta, id_producto, cantidad, precio, es_combo) VALUES ($1, $2, $3, $4, $5)",
-          [id, detalle.id_producto, detalle.cantidad, detalle.precio, detalle.es_combo || false],
-        )
+          // Insertar el detalle de venta con el combo
+          await client.query(
+            "INSERT INTO DetalleVentas (id_venta, id_producto, cantidad, precio, es_combo) VALUES ($1, $2, $3, $4, $5)",
+            [id, detalle.id_producto, detalle.cantidad, detalle.precio, true],
+          )
 
-        // Actualizar el stock
-        if (!detalle.es_combo) {
-          // Si es un producto normal, actualizar su stock
-          await client.query("UPDATE Stock SET cantidad = cantidad - $1 WHERE id_producto = $2", [
-            detalle.cantidad,
-            detalle.id_producto,
-          ])
-        } else {
           // Si es un combo, obtener sus productos y actualizar el stock de cada uno
           const comboDetallesResult = await client.query(
             "SELECT id_producto, cantidad FROM DetalleCombos WHERE id_combo = $1",
@@ -630,11 +610,29 @@ export async function actualizarDetallesVenta(
           )
 
           for (const comboDetalle of comboDetallesResult.rows) {
-            await client.query("UPDATE Stock SET cantidad = cantidad - $1 WHERE id_producto = $2", [
+            await client.query("UPDATE Productos SET stock = stock - $1 WHERE id = $2", [
               comboDetalle.cantidad * detalle.cantidad,
               comboDetalle.id_producto,
             ])
           }
+        } else {
+          // Verificar que el producto exista
+          const productoCheck = await client.query("SELECT id FROM Productos WHERE id = $1", [detalle.id_producto])
+          if (productoCheck.rows.length === 0) {
+            throw new Error(`El producto con ID ${detalle.id_producto} no existe`)
+          }
+
+          // Insertar el detalle de venta con el producto
+          await client.query(
+            "INSERT INTO DetalleVentas (id_venta, id_producto, cantidad, precio, es_combo) VALUES ($1, $2, $3, $4, $5)",
+            [id, detalle.id_producto, detalle.cantidad, detalle.precio, false],
+          )
+
+          // Si es un producto normal, actualizar su stock directamente en la tabla Productos
+          await client.query("UPDATE Productos SET stock = stock - $1 WHERE id = $2", [
+            detalle.cantidad,
+            detalle.id_producto,
+          ])
         }
       }
 

@@ -30,7 +30,7 @@ export async function obtenerCompraPorId(id: number): Promise<Compra | null> {
       // Obtener la compra
       const compraResult = await client.query(
         `
-        SELECT c.*, p.nombre as proveedor_nombre, p.telefono, p.email, p.direccion
+        SELECT c.*, p.nombre as proveedor_nombre, p.telefono, p.email, p.direccion, p.envio
         FROM Compras c
         LEFT JOIN Proveedor p ON c.id_proveedor = p.id
         WHERE c.id = $1
@@ -74,6 +74,7 @@ export async function obtenerCompraPorId(id: number): Promise<Compra | null> {
               telefono: compra.telefono,
               email: compra.email,
               direccion: compra.direccion,
+              envio: compra.envio,
             }
           : undefined,
         detalles,
@@ -89,7 +90,14 @@ export async function obtenerCompraPorId(id: number): Promise<Compra | null> {
 
 export async function crearCompra(
   compra: Omit<Compra, "id">,
-  detalles: { id_producto: number; cantidad: number; precio: number; actualizar_precio_compra?: boolean }[],
+  detalles: {
+    id_producto: number
+    cantidad: number
+    precio: number
+    iva_porcentaje: number
+    precio_con_iva: number
+    actualizar_precio_compra?: boolean
+  }[],
 ): Promise<Compra> {
   try {
     const client = await import("./db").then((module) => module.getClient())
@@ -100,35 +108,44 @@ export async function crearCompra(
 
       // Insertar la compra
       const compraResult = await client.query(
-        "INSERT INTO Compras (id_proveedor, fecha, total) VALUES ($1, $2, $3) RETURNING *",
-        [compra.id_proveedor, compra.fecha || new Date(), compra.total],
+        "INSERT INTO Compras (id_proveedor, fecha, total, costo_envio) VALUES ($1, $2, $3, $4) RETURNING *",
+        [compra.id_proveedor, compra.fecha || new Date(), compra.total, compra.costo_envio || 0],
       )
 
       const nuevaCompra = compraResult.rows[0]
+
+      // Calcular la parte proporcional del envío por producto
+      const totalProductos = detalles.reduce((sum, detalle) => sum + detalle.cantidad, 0)
+      const costoEnvioPorUnidad = totalProductos > 0 ? (compra.costo_envio || 0) / totalProductos : 0
 
       // Insertar los detalles de la compra y actualizar el stock
       for (const detalle of detalles) {
         // Insertar detalle de compra
         await client.query(
-          "INSERT INTO DetalleCompras (id_compra, id_producto, cantidad, precio) VALUES ($1, $2, $3, $4)",
-          [nuevaCompra.id, detalle.id_producto, detalle.cantidad, detalle.precio],
+          "INSERT INTO DetalleCompras (id_compra, id_producto, cantidad, precio, iva_porcentaje, precio_con_iva) VALUES ($1, $2, $3, $4, $5, $6)",
+          [
+            nuevaCompra.id,
+            detalle.id_producto,
+            detalle.cantidad,
+            detalle.precio,
+            detalle.iva_porcentaje,
+            detalle.precio_con_iva,
+          ],
         )
 
-        // Actualizar el stock
-        await client.query(
-          `
-          INSERT INTO Stock (id_producto, cantidad) 
-          VALUES ($1, $2) 
-          ON CONFLICT (id_producto) 
-          DO UPDATE SET cantidad = Stock.cantidad + $2
-        `,
-          [detalle.id_producto, detalle.cantidad],
-        )
+        // Actualizar el stock directamente en la tabla Productos
+        await client.query("UPDATE Productos SET stock = stock + $1 WHERE id = $2", [
+          detalle.cantidad,
+          detalle.id_producto,
+        ])
 
         // Actualizar el precio de compra si se solicita
         if (detalle.actualizar_precio_compra) {
+          // Calcular el precio de compra final (precio con IVA + parte proporcional del envío)
+          const precioCompraFinal = detalle.precio_con_iva + costoEnvioPorUnidad
+
           await client.query("UPDATE Productos SET precio_compra = $1 WHERE id = $2", [
-            detalle.precio,
+            precioCompraFinal,
             detalle.id_producto,
           ])
         }
@@ -180,6 +197,12 @@ export async function actualizarCompra(id: number, compra: Partial<Compra>): Pro
         paramIndex++
       }
 
+      if (compra.costo_envio !== undefined) {
+        updateFields.push(`costo_envio = $${paramIndex}`)
+        updateValues.push(compra.costo_envio)
+        paramIndex++
+      }
+
       if (updateFields.length === 0) {
         return null
       }
@@ -226,7 +249,7 @@ export async function eliminarCompra(id: number): Promise<boolean> {
       // Actualizar el stock de los productos
       for (const detalle of detallesResult.rows) {
         // Reducir el stock (ya que estamos eliminando una compra)
-        await client.query("UPDATE Stock SET cantidad = cantidad - $1 WHERE id_producto = $2", [
+        await client.query("UPDATE Productos SET stock = stock - $1 WHERE id = $2", [
           detalle.cantidad,
           detalle.id_producto,
         ])

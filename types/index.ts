@@ -11,6 +11,8 @@ export interface Producto {
   descripcion: string
   precio: number
   precio_compra?: number
+  precio_mayorista?: number
+  codigo_proveedor?: string
   stock?: number
   codigo?: string // Agregamos campo para código de barras
 }
@@ -42,6 +44,7 @@ export interface DetalleVenta {
   precio: number
   producto?: Producto
   es_combo?: boolean
+  es_mayorista?: boolean
 }
 
 export interface Compra {
@@ -49,6 +52,7 @@ export interface Compra {
   id_proveedor: number
   fecha: string
   total: number
+  costo_envio?: number
   proveedor?: Proveedor
   detalles?: DetalleCompra[]
 }
@@ -59,6 +63,8 @@ export interface DetalleCompra {
   id_producto: number
   cantidad: number
   precio: number
+  iva_porcentaje?: number
+  precio_con_iva?: number
   producto?: Producto
 }
 
@@ -114,5 +120,6 @@ export interface Proveedor {
   telefono?: string
   email?: string
   direccion?: string
+  envio?: number
 }
 

@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { Loader2, Plus, Trash, Barcode } from "lucide-react"
+import { Loader2, Plus, Trash, Barcode, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -15,17 +15,20 @@ import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Card, CardContent } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import type { Producto, Proveedor } from "@/types"
 import { toast } from "@/components/ui/use-toast"
 
 const formSchema = z.object({
   id_proveedor: z.string().min(1, "Proveedor requerido"),
+  costo_envio: z.coerce.number().min(0, "El costo de envío no puede ser negativo"),
   detalles: z
     .array(
       z.object({
         id_producto: z.string().min(1, "Producto requerido"),
         cantidad: z.coerce.number().min(1, "Cantidad mínima es 1"),
         precio: z.coerce.number().min(0, "Precio debe ser mayor o igual a 0"),
+        iva_porcentaje: z.coerce.number().min(0, "IVA debe ser mayor o igual a 0"),
         actualizar_precio_compra: z.boolean().default(true),
       }),
     )
@@ -43,6 +46,7 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
   const [isLoading, setIsLoading] = useState(false)
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
   const [searchCode, setSearchCode] = useState("")
+  const [selectedProveedor, setSelectedProveedor] = useState<Proveedor | null>(null)
 
   useEffect(() => {
     const fetchProveedores = async () => {
@@ -66,11 +70,13 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
     resolver: zodResolver(formSchema),
     defaultValues: {
       id_proveedor: "",
+      costo_envio: 0,
       detalles: [
         {
           id_producto: "",
           cantidad: 1,
           precio: 0,
+          iva_porcentaje: 21, // Valor por defecto: 21%
           actualizar_precio_compra: true,
         },
       ],
@@ -83,13 +89,48 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
   })
 
   const watchDetalles = form.watch("detalles")
+  const watchIdProveedor = form.watch("id_proveedor")
+
+  // Actualizar el proveedor seleccionado cuando cambia el id_proveedor
+  useEffect(() => {
+    if (watchIdProveedor) {
+      const proveedor = proveedores.find((p) => p.id.toString() === watchIdProveedor)
+      setSelectedProveedor(proveedor || null)
+
+      // Actualizar el costo de envío con el valor del proveedor
+      if (proveedor && proveedor.envio !== undefined) {
+        form.setValue("costo_envio", proveedor.envio)
+      }
+    } else {
+      setSelectedProveedor(null)
+    }
+  }, [watchIdProveedor, proveedores, form])
+
+  // Calcular el precio con IVA para cada detalle
+  const calcularPrecioConIVA = (precio: number, ivaPorcentaje: number): number => {
+    return precio * (1 + ivaPorcentaje / 100)
+  }
 
   const calcularTotal = () => {
-    return watchDetalles.reduce((total, detalle) => {
+    // Sumar el precio base * cantidad de cada producto
+    const subtotal = watchDetalles.reduce((total, detalle) => {
       const precio = detalle.precio || 0
       const cantidad = detalle.cantidad || 0
       return total + precio * cantidad
     }, 0)
+
+    // Sumar el IVA de cada producto
+    const totalIVA = watchDetalles.reduce((total, detalle) => {
+      const precio = detalle.precio || 0
+      const cantidad = detalle.cantidad || 0
+      const ivaPorcentaje = detalle.iva_porcentaje || 0
+      return total + precio * (ivaPorcentaje / 100) * cantidad
+    }, 0)
+
+    // Sumar el costo de envío
+    const costoEnvio = form.watch("costo_envio") || 0
+
+    return subtotal + totalIVA + costoEnvio
   }
 
   const handleProductoChange = (index: number, id_producto: string) => {
@@ -128,6 +169,7 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
             id_producto: producto.id.toString(),
             cantidad: 1,
             precio: producto.precio_compra || producto.precio,
+            iva_porcentaje: 21, // Valor por defecto: 21%
             actualizar_precio_compra: true,
           })
           setSearchCode("")
@@ -149,15 +191,24 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
       // Calcular el total
       const total = calcularTotal()
 
+      // Preparar los detalles con el precio_con_iva calculado
+      const detallesConIVA = data.detalles.map((detalle) => ({
+        ...detalle,
+        precio_con_iva: calcularPrecioConIVA(detalle.precio, detalle.iva_porcentaje),
+      }))
+
       // Preparar los datos para la API
       const compraData = {
         id_proveedor: Number.parseInt(data.id_proveedor),
         fecha: new Date().toISOString(),
         total,
-        detalles: data.detalles.map((detalle) => ({
+        costo_envio: data.costo_envio,
+        detalles: detallesConIVA.map((detalle) => ({
           id_producto: Number.parseInt(detalle.id_producto),
           cantidad: detalle.cantidad,
           precio: detalle.precio,
+          iva_porcentaje: detalle.iva_porcentaje,
+          precio_con_iva: detalle.precio_con_iva,
           actualizar_precio_compra: detalle.actualizar_precio_compra,
         })),
       }
@@ -220,6 +271,25 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
               </FormItem>
             )}
           />
+
+          <FormField
+            control={form.control}
+            name="costo_envio"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Costo de Envío</FormLabel>
+                <FormControl>
+                  <Input type="number" step="0.01" min="0" disabled={isLoading} {...field} />
+                </FormControl>
+                {selectedProveedor && (
+                  <p className="text-sm text-muted-foreground">
+                    Costo de envío predeterminado del proveedor: ${selectedProveedor.envio?.toFixed(2) || "0.00"}
+                  </p>
+                )}
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         </div>
 
         <div className="flex items-center gap-2 mb-4">
@@ -240,12 +310,12 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
           {fields.map((field, index) => (
             <Card key={field.id} className="mb-4">
               <CardContent className="pt-4">
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-6">
                   <FormField
                     control={form.control}
                     name={`detalles.${index}.id_producto`}
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className="md:col-span-2">
                         <FormLabel>Producto</FormLabel>
                         <div className="flex gap-2">
                           <Select
@@ -296,7 +366,7 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
                     name={`detalles.${index}.precio`}
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Precio de Compra</FormLabel>
+                        <FormLabel>Precio Base</FormLabel>
                         <FormControl>
                           <Input type="number" step="0.01" disabled={isLoading} {...field} />
                         </FormControl>
@@ -304,7 +374,34 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
                       </FormItem>
                     )}
                   />
-                  <div className="flex flex-col justify-between">
+                  <FormField
+                    control={form.control}
+                    name={`detalles.${index}.iva_porcentaje`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>IVA</FormLabel>
+                        <Select
+                          disabled={isLoading}
+                          onValueChange={(value) => field.onChange(Number.parseFloat(value))}
+                          value={field.value.toString()}
+                          defaultValue={field.value.toString()}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Seleccionar IVA" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="0">0%</SelectItem>
+                            <SelectItem value="10.5">10.5%</SelectItem>
+                            <SelectItem value="21">21%</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="flex flex-col justify-between md:col-span-1">
                     <FormField
                       control={form.control}
                       name={`detalles.${index}.actualizar_precio_compra`}
@@ -314,7 +411,24 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
                             <Checkbox checked={field.value} onCheckedChange={field.onChange} />
                           </FormControl>
                           <div className="space-y-1 leading-none">
-                            <FormLabel>Actualizar precio de compra</FormLabel>
+                            <div className="flex items-center">
+                              <FormLabel>Actualizar precio</FormLabel>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-4 w-4 ml-1">
+                                      <Info className="h-3 w-3" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p className="max-w-xs">
+                                      Actualiza el precio de compra del producto con el precio base + IVA + parte
+                                      proporcional del envío
+                                    </p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </div>
                           </div>
                         </FormItem>
                       )}
@@ -331,6 +445,29 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
                     </Button>
                   </div>
                 </div>
+
+                {/* Mostrar el precio con IVA calculado */}
+                <div className="mt-2 text-sm text-muted-foreground">
+                  <p>
+                    Precio con IVA: $
+                    {calcularPrecioConIVA(
+                      watchDetalles[index]?.precio || 0,
+                      watchDetalles[index]?.iva_porcentaje || 0,
+                    ).toFixed(2)}
+                  </p>
+                  <p>
+                    Subtotal: $
+                    {((watchDetalles[index]?.precio || 0) * (watchDetalles[index]?.cantidad || 0)).toFixed(2)}
+                  </p>
+                  <p>
+                    IVA: $
+                    {(
+                      (watchDetalles[index]?.precio || 0) *
+                      (watchDetalles[index]?.cantidad || 0) *
+                      ((watchDetalles[index]?.iva_porcentaje || 0) / 100)
+                    ).toFixed(2)}
+                  </p>
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -338,7 +475,15 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => append({ id_producto: "", cantidad: 1, precio: 0, actualizar_precio_compra: true })}
+            onClick={() =>
+              append({
+                id_producto: "",
+                cantidad: 1,
+                precio: 0,
+                iva_porcentaje: 21,
+                actualizar_precio_compra: true,
+              })
+            }
             disabled={isLoading}
           >
             <Plus className="mr-2 h-4 w-4" />
@@ -347,9 +492,39 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
         </div>
 
         <div className="bg-muted p-4 rounded-md">
-          <div className="flex justify-between text-lg font-bold">
-            <span>Total:</span>
-            <span>${calcularTotal().toFixed(2)}</span>
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <span>Subtotal:</span>
+              <span>
+                $
+                {watchDetalles
+                  .reduce((total, detalle) => total + (detalle.precio || 0) * (detalle.cantidad || 0), 0)
+                  .toFixed(2)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>IVA:</span>
+              <span>
+                $
+                {watchDetalles
+                  .reduce((total, detalle) => {
+                    const precio = detalle.precio || 0
+                    const cantidad = detalle.cantidad || 0
+                    const ivaPorcentaje = detalle.iva_porcentaje || 0
+                    return total + precio * (ivaPorcentaje / 100) * cantidad
+                  }, 0)
+                  .toFixed(2)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>Costo de Envío:</span>
+              <span>${(form.watch("costo_envio") || 0).toFixed(2)}</span>
+            </div>
+            <Separator />
+            <div className="flex justify-between text-lg font-bold">
+              <span>Total:</span>
+              <span>${calcularTotal().toFixed(2)}</span>
+            </div>
           </div>
         </div>
 

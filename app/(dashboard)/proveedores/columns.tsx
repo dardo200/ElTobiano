@@ -10,35 +10,51 @@ import { toast } from "@/components/ui/use-toast"
 export const columns: ColumnDef<Proveedor>[] = [
   {
     accessorKey: "id",
-    header: "ID",
+    header: () => <div className="text-center">ID</div>,
+    cell: ({ row }) => <div className="text-center">{row.getValue("id")}</div>,
   },
   {
     accessorKey: "nombre",
     header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-        Nombre
-        <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
+      <div className="text-left">
+        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+          Nombre
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      </div>
     ),
+    cell: ({ row }) => <div className="text-left">{row.getValue("nombre")}</div>,
   },
   {
     accessorKey: "telefono",
-    header: "Teléfono",
-    cell: ({ row }) => <div>{row.getValue("telefono") || "-"}</div>,
+    header: () => <div className="text-left">Teléfono</div>,
+    cell: ({ row }) => <div className="text-left">{row.getValue("telefono") || "-"}</div>,
   },
   {
     accessorKey: "email",
-    header: "Email",
-    cell: ({ row }) => <div>{row.getValue("email") || "-"}</div>,
+    header: () => <div className="text-left">Email</div>,
+    cell: ({ row }) => <div className="text-left">{row.getValue("email") || "-"}</div>,
+  },
+  {
+    accessorKey: "envio",
+    header: () => <div className="text-right">Precio de Envío</div>,
+    cell: ({ row }) => {
+      const envio = Number.parseFloat(row.getValue("envio") || "0")
+      const formatted = new Intl.NumberFormat("es-AR", {
+        style: "currency",
+        currency: "ARS",
+      }).format(envio)
+      return <div className="text-right">{formatted}</div>
+    },
   },
   {
     accessorKey: "direccion",
-    header: "Dirección",
-    cell: ({ row }) => <div className="max-w-[200px] truncate">{row.getValue("direccion") || "-"}</div>,
+    header: () => <div className="text-left">Dirección</div>,
+    cell: ({ row }) => <div className="text-left max-w-[200px] truncate">{row.getValue("direccion") || "-"}</div>,
   },
   {
     id: "acciones",
-    header: "Acciones",
+    header: () => <div className="text-center">Acciones</div>,
     cell: ({ row, table }) => {
       const router = useRouter()
       const proveedor = row.original

@@ -23,6 +23,8 @@ const formSchema = z.object({
   descripcion: z.string().optional(),
   precio: z.coerce.number().min(0, "El precio debe ser mayor o igual a 0"),
   precio_compra: z.coerce.number().min(0, "El precio de compra debe ser mayor o igual a 0"),
+  precio_mayorista: z.coerce.number().min(0, "El precio mayorista debe ser mayor o igual a 0"),
+  codigo_proveedor: z.string().optional(),
   stock: z.coerce.number().int().min(0, "El stock debe ser mayor o igual a 0"),
   codigo: z.string().min(1, "El código de barras es requerido"),
 })
@@ -39,6 +41,7 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({ initialData }) => {
   const [isGeneratingCode, setIsGeneratingCode] = useState(false)
   const [showBarcodeDialog, setShowBarcodeDialog] = useState(false)
   const [showPriceWarning, setShowPriceWarning] = useState(false)
+  const [showMayoristaWarning, setShowMayoristaWarning] = useState(false)
   const barcodeCanvasRef = useRef<HTMLCanvasElement>(null)
 
   const form = useForm<ProductoFormValues>({
@@ -48,6 +51,8 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({ initialData }) => {
       descripcion: "",
       precio: 0,
       precio_compra: 0,
+      precio_mayorista: 0,
+      codigo_proveedor: "",
       stock: 0,
       codigo: "",
     },
@@ -56,6 +61,7 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({ initialData }) => {
   // Observar cambios en los precios para mostrar advertencia
   const precio = form.watch("precio")
   const precio_compra = form.watch("precio_compra")
+  const precio_mayorista = form.watch("precio_mayorista")
 
   useEffect(() => {
     if (precio > 0 && precio_compra > 0 && precio < precio_compra) {
@@ -63,7 +69,13 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({ initialData }) => {
     } else {
       setShowPriceWarning(false)
     }
-  }, [precio, precio_compra])
+
+    if (precio_mayorista > 0 && precio > 0 && precio_mayorista >= precio) {
+      setShowMayoristaWarning(true)
+    } else {
+      setShowMayoristaWarning(false)
+    }
+  }, [precio, precio_compra, precio_mayorista])
 
   const onSubmit = async (data: ProductoFormValues) => {
     setIsLoading(true)
@@ -277,7 +289,20 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({ initialData }) => {
               name="precio"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Precio de Venta</FormLabel>
+                  <FormLabel>Precio de Venta (Minorista)</FormLabel>
+                  <FormControl>
+                    <Input type="number" step="0.01" disabled={isLoading} placeholder="0.00" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="precio_mayorista"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Precio de Venta (Mayorista)</FormLabel>
                   <FormControl>
                     <Input type="number" step="0.01" disabled={isLoading} placeholder="0.00" {...field} />
                   </FormControl>
@@ -357,6 +382,24 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({ initialData }) => {
                 </FormItem>
               )}
             />
+            <FormField
+              control={form.control}
+              name="codigo_proveedor"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Código de Proveedor</FormLabel>
+                  <FormControl>
+                    <Input
+                      disabled={isLoading}
+                      placeholder="Código del producto en el proveedor"
+                      {...field}
+                      value={field.value || ""}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </div>
           <FormField
             control={form.control}
@@ -382,8 +425,19 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({ initialData }) => {
               <AlertTriangle className="h-4 w-4" />
               <AlertTitle>Advertencia de precio</AlertTitle>
               <AlertDescription>
-                El precio de venta (${precio}) es menor que el precio de compra (${precio_compra}). Esto resultará en
-                pérdidas por cada venta.
+                El precio de venta minorista (${precio}) es menor que el precio de compra (${precio_compra}). Esto
+                resultará en pérdidas por cada venta.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {showMayoristaWarning && (
+            <Alert variant="warning">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Advertencia de precio mayorista</AlertTitle>
+              <AlertDescription>
+                El precio mayorista (${precio_mayorista}) es mayor o igual que el precio minorista (${precio}).
+                Normalmente el precio mayorista debería ser menor que el precio minorista.
               </AlertDescription>
             </Alert>
           )}
