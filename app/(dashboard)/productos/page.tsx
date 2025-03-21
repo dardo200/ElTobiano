@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { Plus } from "lucide-react"
+import { Plus, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Heading } from "@/components/ui/heading"
 import { Separator } from "@/components/ui/separator"
@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Card, CardContent } from "@/components/ui/card"
 import { toast } from "@/components/ui/use-toast"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 
 export default function ProductosPage() {
   const router = useRouter()
@@ -20,6 +21,7 @@ export default function ProductosPage() {
   const [filteredProductos, setFilteredProductos] = useState<Producto[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
+  const [searchProveedorTerm, setSearchProveedorTerm] = useState("")
 
   const fetchProductos = useCallback(async () => {
     try {
@@ -57,20 +59,30 @@ export default function ProductosPage() {
     })
   }, [fetchProductos])
 
-  // Función para filtrar productos por nombre o código
+  // Función para filtrar productos por nombre, código y código de proveedor
   useEffect(() => {
-    if (!searchTerm.trim()) {
-      setFilteredProductos(productos)
-      return
+    let filtered = [...productos]
+
+    // Filtrar por nombre o código
+    if (searchTerm.trim()) {
+      filtered = filtered.filter(
+        (producto) =>
+          producto.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (producto.codigo && producto.codigo.toLowerCase().includes(searchTerm.toLowerCase())),
+      )
     }
 
-    const filtered = productos.filter(
-      (producto) =>
-        producto.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (producto.codigo && producto.codigo.toLowerCase().includes(searchTerm.toLowerCase())),
-    )
+    // Filtrar por código de proveedor
+    if (searchProveedorTerm.trim()) {
+      filtered = filtered.filter(
+        (producto) =>
+          producto.codigo_proveedor &&
+          producto.codigo_proveedor.toLowerCase().includes(searchProveedorTerm.toLowerCase()),
+      )
+    }
+
     setFilteredProductos(filtered)
-  }, [searchTerm, productos])
+  }, [searchTerm, searchProveedorTerm, productos])
 
   // Función para eliminar un producto y actualizar la lista
   const handleDeleteProducto = async (id: number) => {
@@ -122,15 +134,51 @@ export default function ProductosPage() {
         </div>
       ) : (
         <>
-          <div className="flex items-center py-4">
-            <Input
-              placeholder="Buscar por nombre o código..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="max-w-sm"
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+            <div>
+              <Label htmlFor="search" className="mb-2 block">
+                Buscar por nombre o código
+              </Label>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="search"
+                  placeholder="Buscar por nombre o código..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="searchProveedor" className="mb-2 block">
+                Buscar por código de proveedor
+              </Label>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="searchProveedor"
+                  placeholder="Buscar por código de proveedor..."
+                  value={searchProveedorTerm}
+                  onChange={(e) => setSearchProveedorTerm(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+            </div>
           </div>
-          <DataTable columns={columns} data={filteredProductos} deleteRow={handleDeleteProducto} />
+          <DataTable
+            columns={columns}
+            data={filteredProductos}
+            deleteRow={handleDeleteProducto}
+            initialState={{
+              sorting: [
+                {
+                  id: "nombre",
+                  desc: false,
+                },
+              ],
+            }}
+          />
         </>
       )}
     </>

@@ -51,7 +51,16 @@ export const columns: ColumnDef<Producto>[] = [
   },
   {
     accessorKey: "codigo",
-    header: () => <div className="text-left">Código</div>,
+    header: ({ column }) => {
+      return (
+        <div className="text-left">
+          <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+            Código
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        </div>
+      )
+    },
     cell: ({ row }) => <div className="font-mono">{row.getValue("codigo") || "N/A"}</div>,
   },
   {
@@ -122,7 +131,16 @@ export const columns: ColumnDef<Producto>[] = [
   },
   {
     accessorKey: "stock",
-    header: () => <div className="text-center">Stock</div>,
+    header: ({ column }) => {
+      return (
+        <div className="text-center">
+          <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+            Stock
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        </div>
+      )
+    },
     cell: ({ row }) => {
       const stock = Number.parseInt(row.getValue("stock") || "0")
 
