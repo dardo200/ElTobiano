@@ -10,13 +10,13 @@ import * as z from "zod"
 import { Loader2, Plus, Trash, Tag, Barcode } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import type { Cliente, Producto, Combo } from "@/types"
 import { toast } from "@/components/ui/use-toast"
 
@@ -50,6 +50,32 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
   const [searchCode, setSearchCode] = useState("")
   const [activeTabsState, setActiveTabsState] = useState<Record<number, "producto" | "combo">>({})
   const [isMayorista, setIsMayorista] = useState(false)
+
+  // Convertir clientes a opciones para el Combobox
+  const clienteOptions: ComboboxOption[] = [
+    { value: "null", label: "Sin cliente" },
+    ...clientes.map((cliente) => ({
+      value: cliente.id.toString(),
+      label: cliente.nombre,
+      searchTerms: `${cliente.dni || ""} ${cliente.email || ""} ${cliente.telefono || ""}`,
+    })),
+  ]
+
+  // Convertir productos a opciones para el Combobox
+  const productoOptions: ComboboxOption[] = productos.map((producto) => ({
+    value: producto.id.toString(),
+    label: `${producto.nombre} - $${
+      isMayorista && producto.precio_mayorista ? producto.precio_mayorista.toFixed(2) : producto.precio.toFixed(2)
+    } - Stock: ${producto.stock || 0}`,
+    searchTerms: `${producto.codigo || ""} ${producto.descripcion || ""} ${producto.codigo_proveedor || ""}`,
+  }))
+
+  // Convertir combos a opciones para el Combobox
+  const comboOptions: ComboboxOption[] = combos.map((combo) => ({
+    value: combo.id.toString(),
+    label: `${combo.nombre} - $${combo.precio_venta.toFixed(2)}`,
+    searchTerms: `${combo.codigo || ""} ${combo.descripcion || ""}`,
+  }))
 
   useEffect(() => {
     const fetchCombos = async () => {
@@ -132,11 +158,7 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
         // Usar precio mayorista si está seleccionado, de lo contrario usar precio minorista
         const precio = isMayorista && producto.precio_mayorista ? producto.precio_mayorista : producto.precio
         form.setValue(`detalles.${index}.id_producto`, producto.id.toString())
-        form.setValue(
-          `detalles.${index}.precio  producto.id.toString())
-        form.setValue(\`detalles.${index}.precio`,
-          precio,
-        )
+        form.setValue(`detalles.${index}.precio`, precio)
         form.setValue(`detalles.${index}.es_combo`, false)
         form.setValue(`detalles.${index}.tipo`, "producto")
         form.setValue(`detalles.${index}.es_mayorista`, isMayorista)
@@ -223,7 +245,7 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
 
       // Preparar los datos para la API
       const ventaData = {
-        id_cliente: data.id_cliente ? Number.parseInt(data.id_cliente) : null,
+        id_cliente: data.id_cliente && data.id_cliente !== "null" ? Number.parseInt(data.id_cliente) : null,
         fecha: new Date().toISOString(),
         total,
         cerrado: false,
@@ -300,33 +322,24 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 w-full">
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <FormField
             control={form.control}
             name="id_cliente"
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Cliente</FormLabel>
-                <Select
-                  disabled={isLoading}
-                  onValueChange={field.onChange}
-                  value={field.value}
-                  defaultValue={field.value}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar cliente" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="null">Sin cliente</SelectItem>
-                    {clientes.map((cliente) => (
-                      <SelectItem key={cliente.id} value={cliente.id.toString()}>
-                        {cliente.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <Combobox
+                    options={clienteOptions}
+                    value={field.value || ""}
+                    onChange={field.onChange}
+                    placeholder="Seleccionar cliente"
+                    emptyMessage="No se encontraron clientes"
+                    disabled={isLoading}
+                    searchPlaceholder="Buscar por nombre, DNI, email..."
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -337,14 +350,14 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
           </div>
         </div>
 
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 mb-4">
           <Input
             placeholder="Escanear código de barras"
             value={searchCode}
             onChange={(e) => setSearchCode(e.target.value)}
-            className="max-w-xs"
+            className="w-full sm:max-w-xs"
           />
-          <Button type="button" onClick={handleSearchByCode} disabled={!searchCode}>
+          <Button type="button" onClick={handleSearchByCode} disabled={!searchCode} className="w-full sm:w-auto">
             <Barcode className="mr-2 h-4 w-4" />
             Buscar
           </Button>
@@ -358,8 +371,8 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
             return (
               <Card key={field.id} className="mb-4">
                 <CardContent className="pt-4">
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
-                    <div className="md:col-span-2">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                    <div className="sm:col-span-2">
                       <Tabs
                         value={activeTab}
                         onValueChange={(value) => handleTabChange(index, value as "producto" | "combo")}
@@ -375,33 +388,21 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Producto</FormLabel>
-                                <div className="flex gap-2">
-                                  <Select
-                                    disabled={isLoading}
-                                    onValueChange={(value) => {
-                                      field.onChange(value)
-                                      handleProductoChange(index, value, "producto")
-                                    }}
-                                    value={field.value}
-                                    defaultValue={field.value}
-                                  >
-                                    <FormControl>
-                                      <SelectTrigger>
-                                        <SelectValue placeholder="Seleccionar producto" />
-                                      </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                      {productos.map((producto) => (
-                                        <SelectItem key={producto.id} value={producto.id.toString()}>
-                                          {producto.nombre} - $
-                                          {isMayorista && producto.precio_mayorista
-                                            ? producto.precio_mayorista.toFixed(2)
-                                            : producto.precio.toFixed(2)}{" "}
-                                          - Stock: {producto.stock || 0}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
+                                <div className="flex gap-2 w-full">
+                                  <FormControl className="flex-1">
+                                    <Combobox
+                                      options={productoOptions}
+                                      value={field.value}
+                                      onChange={(value) => {
+                                        field.onChange(value)
+                                        handleProductoChange(index, value, "producto")
+                                      }}
+                                      placeholder="Seleccionar producto"
+                                      emptyMessage="No se encontraron productos"
+                                      disabled={isLoading}
+                                      searchPlaceholder="Buscar por nombre, código..."
+                                    />
+                                  </FormControl>
                                   <Button
                                     type="button"
                                     variant="outline"
@@ -423,29 +424,21 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Combo</FormLabel>
-                                <div className="flex gap-2">
-                                  <Select
-                                    disabled={isLoading}
-                                    onValueChange={(value) => {
-                                      field.onChange(value)
-                                      handleProductoChange(index, value, "combo")
-                                    }}
-                                    value={field.value}
-                                    defaultValue={field.value}
-                                  >
-                                    <FormControl>
-                                      <SelectTrigger>
-                                        <SelectValue placeholder="Seleccionar combo" />
-                                      </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                      {combos.map((combo) => (
-                                        <SelectItem key={combo.id} value={combo.id.toString()}>
-                                          {combo.nombre} - ${combo.precio_venta.toFixed(2)}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
+                                <div className="flex gap-2 w-full">
+                                  <FormControl className="flex-1">
+                                    <Combobox
+                                      options={comboOptions}
+                                      value={field.value}
+                                      onChange={(value) => {
+                                        field.onChange(value)
+                                        handleProductoChange(index, value, "combo")
+                                      }}
+                                      placeholder="Seleccionar combo"
+                                      emptyMessage="No se encontraron combos"
+                                      disabled={isLoading}
+                                      searchPlaceholder="Buscar por nombre, código..."
+                                    />
+                                  </FormControl>
                                 </div>
                                 <FormMessage />
                               </FormItem>
@@ -480,13 +473,14 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
                         </FormItem>
                       )}
                     />
-                    <div className="flex items-end">
+                    <div className="flex items-end justify-end sm:justify-start">
                       <Button
                         type="button"
                         variant="destructive"
                         size="icon"
                         onClick={() => remove(index)}
                         disabled={isLoading || fields.length === 1}
+                        className="h-10 w-10"
                       >
                         <Trash className="h-4 w-4" />
                       </Button>
@@ -525,17 +519,17 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
         </div>
 
         <Separator />
-        <div className="flex justify-end">
+        <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
           <Button
             type="button"
             variant="outline"
             onClick={() => router.push("/ventas")}
-            className="mr-2"
+            className="w-full sm:w-auto"
             disabled={isLoading}
           >
             Cancelar
           </Button>
-          <Button type="submit" disabled={isLoading}>
+          <Button type="submit" disabled={isLoading} className="w-full sm:w-auto">
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Crear Venta
           </Button>
