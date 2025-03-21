@@ -30,7 +30,7 @@ export async function POST(req: Request) {
     const cookieStore = await cookies()
     cookieStore.set("user_id", usuario.id.toString(), {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: false,
       maxAge: 60 * 60 * 24 * 7, // 1 semana
       path: "/",
     })
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     // Guardar el rol del usuario en una cookie
     cookieStore.set("user_role", usuario.rol, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: false,
       maxAge: 60 * 60 * 24 * 7, // 1 semana
       path: "/",
     })
