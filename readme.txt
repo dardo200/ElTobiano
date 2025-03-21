@@ -136,3 +136,38 @@ Licencia
 Este proyecto está bajo la licencia MIT. Consulta el archivo LICENSE para más detalles.
 
 ¡Gracias por usar este sistema de gestión de comercio! Si tienes alguna pregunta, no dudes en contactarnos.
+-- Agregar nuevos campos a la tabla Productos
+ALTER TABLE Productos
+ADD COLUMN IF NOT EXISTS precio_mayorista REAL,
+ADD COLUMN IF NOT EXISTS codigo_proveedor TEXT,
+ADD COLUMN IF NOT EXISTS stock INTEGER;
+
+-- Agregar nuevo campo a la tabla Proveedor
+ALTER TABLE Proveedor
+ADD COLUMN IF NOT EXISTS envio REAL;
+
+-- Agregar nuevos campos a la tabla DetalleVentas
+ALTER TABLE DetalleVentas
+ADD COLUMN IF NOT EXISTS es_mayorista BOOLEAN DEFAULT FALSE;
+
+-- Agregar nuevos campos a la tabla Compras
+ALTER TABLE Compras
+ADD COLUMN IF NOT EXISTS costo_envio REAL;
+
+-- Agregar nuevos campos a la tabla DetalleCompras
+ALTER TABLE DetalleCompras
+ADD COLUMN IF NOT EXISTS iva_porcentaje REAL,
+ADD COLUMN IF NOT EXISTS precio_con_iva REAL;
+
+-- Agregar nuevo campo a la tabla Combos
+ALTER TABLE Combos
+ADD COLUMN IF NOT EXISTS codigo TEXT;
+
+-- Actualizar la tabla Ventas para incluir la restricción CHECK en el campo estado
+ALTER TABLE Ventas
+ADD CONSTRAINT check_estado 
+CHECK (estado IN ('Pendiente', 'Para embalar', 'Despachado'));
+
+-- Actualizar la tabla Stock para asegurar que la cantidad tenga un valor predeterminado
+ALTER TABLE Stock
+ALTER COLUMN cantidad SET DEFAULT 0;
