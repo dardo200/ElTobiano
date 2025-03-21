@@ -28,9 +28,21 @@ export async function obtenerClientePorId(id: number): Promise<Cliente | null> {
 
 export async function crearCliente(cliente: Omit<Cliente, "id">): Promise<Cliente> {
   try {
+    // Actualizar la consulta para incluir los nuevos campos
     const result = await executeQuery(
-      "INSERT INTO Clientes (nombre, email, telefono, direccion) VALUES ($1, $2, $3, $4) RETURNING *",
-      [cliente.nombre, cliente.email, cliente.telefono, cliente.direccion],
+      `INSERT INTO Clientes (
+        nombre, email, telefono, direccion, dni, provincia, ciudad, cp
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [
+        cliente.nombre,
+        cliente.email,
+        cliente.telefono,
+        cliente.direccion,
+        cliente.dni || null,
+        cliente.provincia || null,
+        cliente.ciudad || null,
+        cliente.cp || null,
+      ],
     )
 
     return result.rows[0]
@@ -67,6 +79,31 @@ export async function actualizarCliente(id: number, cliente: Partial<Cliente>): 
     if (cliente.direccion !== undefined) {
       updateFields.push(`direccion = $${paramIndex}`)
       updateValues.push(cliente.direccion)
+      paramIndex++
+    }
+
+    // Agregar los nuevos campos
+    if (cliente.dni !== undefined) {
+      updateFields.push(`dni = $${paramIndex}`)
+      updateValues.push(cliente.dni || null)
+      paramIndex++
+    }
+
+    if (cliente.provincia !== undefined) {
+      updateFields.push(`provincia = $${paramIndex}`)
+      updateValues.push(cliente.provincia || null)
+      paramIndex++
+    }
+
+    if (cliente.ciudad !== undefined) {
+      updateFields.push(`ciudad = $${paramIndex}`)
+      updateValues.push(cliente.ciudad || null)
+      paramIndex++
+    }
+
+    if (cliente.cp !== undefined) {
+      updateFields.push(`cp = $${paramIndex}`)
+      updateValues.push(cliente.cp || null)
       paramIndex++
     }
 

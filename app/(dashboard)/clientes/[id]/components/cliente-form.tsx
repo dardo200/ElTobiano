@@ -20,6 +20,10 @@ const formSchema = z.object({
   email: z.string().email("Email inválido").optional().or(z.literal("")),
   telefono: z.string().optional(),
   direccion: z.string().optional(),
+  dni: z.string().optional().or(z.literal("")),
+  provincia: z.string().optional().or(z.literal("")),
+  ciudad: z.string().optional().or(z.literal("")),
+  cp: z.string().optional().or(z.literal("")),
 })
 
 type ClienteFormValues = z.infer<typeof formSchema>
@@ -39,6 +43,10 @@ export const ClienteForm: React.FC<ClienteFormProps> = ({ initialData }) => {
       email: "",
       telefono: "",
       direccion: "",
+      dni: "",
+      provincia: "",
+      ciudad: "",
+      cp: "",
     },
   })
 
@@ -122,7 +130,63 @@ export const ClienteForm: React.FC<ClienteFormProps> = ({ initialData }) => {
               </FormItem>
             )}
           />
+          <FormField
+            control={form.control}
+            name="dni"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>DNI</FormLabel>
+                <FormControl>
+                  <Input disabled={isLoading} placeholder="DNI del cliente" {...field} value={field.value || ""} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         </div>
+
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
+          <FormField
+            control={form.control}
+            name="provincia"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Provincia</FormLabel>
+                <FormControl>
+                  <Input disabled={isLoading} placeholder="Provincia" {...field} value={field.value || ""} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="ciudad"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Ciudad</FormLabel>
+                <FormControl>
+                  <Input disabled={isLoading} placeholder="Ciudad" {...field} value={field.value || ""} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="cp"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Código Postal</FormLabel>
+                <FormControl>
+                  <Input disabled={isLoading} placeholder="Código Postal" {...field} value={field.value || ""} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
         <FormField
           control={form.control}
           name="direccion"

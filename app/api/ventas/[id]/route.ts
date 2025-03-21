@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server"
 import { obtenerVentaPorId, actualizarVenta, eliminarVenta } from "@/lib/venta-service"
 
-export async function GET(req: Request, context: { params: { id: string } }) {
+export async function GET(req: Request, { params }: { params: { id: string } }) {
   try {
-    const { id } = context.params
-    const ventaId = Number.parseInt(id)
-    const venta = await obtenerVentaPorId(ventaId)
+    const paramsAwait = await params
+    const id = Number.parseInt(paramsAwait.id)
+    const venta = await obtenerVentaPorId(id)
 
     if (!venta) {
       return NextResponse.json({ error: "Venta no encontrada" }, { status: 404 })
@@ -13,18 +13,18 @@ export async function GET(req: Request, context: { params: { id: string } }) {
 
     return NextResponse.json(venta)
   } catch (error) {
-    console.error(`Error al obtener venta con id ${context.params.id}:`, error)
+    console.error(`Error al obtener venta con id ${(await params).id}:`, error)
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
 
-export async function PATCH(req: Request, context: { params: { id: string } }) {
+export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   try {
-    const { id } = context.params
-    const ventaId = Number.parseInt(id)
+    const paramsAwait = await params
+    const id = Number.parseInt(paramsAwait.id)
     const body = await req.json()
 
-    const venta = await actualizarVenta(ventaId, body)
+    const venta = await actualizarVenta(id, body)
 
     if (!venta) {
       return NextResponse.json({ error: "Venta no encontrada" }, { status: 404 })
@@ -32,16 +32,16 @@ export async function PATCH(req: Request, context: { params: { id: string } }) {
 
     return NextResponse.json(venta)
   } catch (error) {
-    console.error(`Error al actualizar venta con id ${context.params.id}:`, error)
+    console.error(`Error al actualizar venta con id ${(await params).id}:`, error)
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
 
-export async function DELETE(req: Request, context: { params: { id: string } }) {
+export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   try {
-    const { id } = context.params
-    const ventaId = Number.parseInt(id)
-    const success = await eliminarVenta(ventaId)
+    const paramsAwait = await params
+    const id = Number.parseInt(paramsAwait.id)
+    const success = await eliminarVenta(id)
 
     if (!success) {
       return NextResponse.json({ error: "Venta no encontrada" }, { status: 404 })
@@ -49,7 +49,8 @@ export async function DELETE(req: Request, context: { params: { id: string } }) 
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error(`Error al eliminar venta con id ${context.params.id}:`, error)
+    console.error(`Error al eliminar venta con id ${(await params).id}:`, error)
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
+

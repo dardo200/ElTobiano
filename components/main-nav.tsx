@@ -12,9 +12,11 @@ import {
   BarChart,
   Settings,
   Truck,
+  Layers,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { Badge } from "@/components/ui/badge"
 
 interface MainNavProps {
   className?: string
@@ -94,6 +96,13 @@ export function MainNav({ className }: MainNavProps) {
         badge: productosSinStock > 0 ? { text: productosSinStock.toString(), variant: "destructive" as const } : null,
       },
       {
+        href: "/stock",
+        label: "Stock",
+        icon: Layers,
+        active: pathname === "/stock",
+        badge: null,
+      },
+      {
         href: "/clientes",
         label: "Clientes",
         icon: Users,
@@ -152,6 +161,20 @@ export function MainNav({ className }: MainNavProps) {
         active: pathname === "/ventas" || pathname.startsWith("/ventas/"),
         badge: ventasPendientes > 0 ? { text: ventasPendientes.toString(), variant: "destructive" as const } : null,
       },
+      {
+        href: "/stock",
+        label: "Stock",
+        icon: Layers,
+        active: pathname === "/stock",
+        badge: null,
+      },
+      {
+        href: "/perfil",
+        label: "Perfil",
+        icon: Settings,
+        active: pathname === "/perfil",
+        badge: null,
+      },
     ]
 
     if (isLoading) return []
@@ -173,12 +196,13 @@ export function MainNav({ className }: MainNavProps) {
               : "text-muted-foreground",
           )}
         >
+          <link.icon className="mr-2 h-4 w-4" />
           {link.label}
-          {/* {route.badge && (
-            <Badge variant={route.badge.variant} className="ml-2">
-              {route.badge.text}
+          {link.badge && (
+            <Badge variant={link.badge.variant} className="ml-2">
+              {link.badge.text}
             </Badge>
-          )} */}
+          )}
         </Link>
       ))}
     </nav>

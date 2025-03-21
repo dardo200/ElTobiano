@@ -171,3 +171,10 @@ CHECK (estado IN ('Pendiente', 'Para embalar', 'Despachado'));
 -- Actualizar la tabla Stock para asegurar que la cantidad tenga un valor predeterminado
 ALTER TABLE Stock
 ALTER COLUMN cantidad SET DEFAULT 0;
+
+https://learn.microsoft.com/en-us/azure/developer/dev-tunnels/get-started?tabs=windows#install
+
+Invoke-WebRequest -Uri https://aka.ms/TunnelsCliDownload/win-x64 -OutFile devtunnel.exe
+.\devtunnel.exe -h
+devtunnel user login
+devtunnel echo http -p 3000 -a

@@ -22,6 +22,11 @@ export const columns: ColumnDef<Cliente>[] = [
     ),
   },
   {
+    accessorKey: "dni",
+    header: "DNI",
+    cell: ({ row }) => <div>{row.getValue("dni") || "-"}</div>,
+  },
+  {
     accessorKey: "email",
     header: "Email",
     cell: ({ row }) => <div>{row.getValue("email") || "-"}</div>,
@@ -32,9 +37,9 @@ export const columns: ColumnDef<Cliente>[] = [
     cell: ({ row }) => <div>{row.getValue("telefono") || "-"}</div>,
   },
   {
-    accessorKey: "direccion",
-    header: "Dirección",
-    cell: ({ row }) => <div className="max-w-[200px] truncate">{row.getValue("direccion") || "-"}</div>,
+    accessorKey: "ciudad",
+    header: "Ciudad",
+    cell: ({ row }) => <div>{row.getValue("ciudad") || "-"}</div>,
   },
   {
     id: "acciones",

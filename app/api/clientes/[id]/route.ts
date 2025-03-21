@@ -3,7 +3,9 @@ import { obtenerClientePorId, actualizarCliente, eliminarCliente } from "@/lib/c
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   try {
-    const id = Number.parseInt(params.id)
+    // Usar await params para cumplir con la nueva API de Next.js
+    const paramsObj = await params
+    const id = Number.parseInt(paramsObj.id)
     const cliente = await obtenerClientePorId(id)
 
     if (!cliente) {
@@ -19,7 +21,9 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   try {
-    const id = Number.parseInt(params.id)
+    // Usar await params para cumplir con la nueva API de Next.js
+    const paramsObj = await params
+    const id = Number.parseInt(paramsObj.id)
     const body = await req.json()
     const cliente = await actualizarCliente(id, body)
 
@@ -36,7 +40,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   try {
-    const id = Number.parseInt(params.id)
+    // Usar await params para cumplir con la nueva API de Next.js
+    const paramsObj = await params
+    const id = Number.parseInt(paramsObj.id)
     const success = await eliminarCliente(id)
 
     if (!success) {

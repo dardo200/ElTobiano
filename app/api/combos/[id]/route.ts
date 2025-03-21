@@ -3,7 +3,8 @@ import { obtenerComboPorId, actualizarCombo, eliminarCombo } from "@/lib/combo-s
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   try {
-    const id = Number.parseInt(params.id)
+    const paramsAwait = await params
+    const id = Number.parseInt(paramsAwait.id)
     const combo = await obtenerComboPorId(id)
 
     if (!combo) {
@@ -19,7 +20,8 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   try {
-    const id = Number.parseInt(params.id)
+    const paramsAwait = await params
+    const id = Number.parseInt(paramsAwait.id)
     const body = await req.json()
     const { detalles, ...comboData } = body
 
@@ -38,7 +40,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   try {
-    const id = Number.parseInt(params.id)
+    const paramsAwait = await params
+    const id = Number.parseInt(paramsAwait.id)
     const success = await eliminarCombo(id)
 
     if (!success) {

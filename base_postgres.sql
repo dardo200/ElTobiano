@@ -163,3 +163,13 @@ ON CONFLICT (usuario) DO NOTHING;
 INSERT INTO usuarios (usuario, password, rol)
 VALUES ('administracion', '$2b$10$kE.zqrJ8r/czRADHSLQanePVnVizi.n8JdAyRTsasf/g22/16AZt.', 'administracion')
 ON CONFLICT (usuario) DO NOTHING;
+
+-- Agregar los nuevos campos a la tabla Clientes
+ALTER TABLE Clientes
+ADD COLUMN IF NOT EXISTS DNI TEXT,
+ADD COLUMN IF NOT EXISTS Provincia TEXT,
+ADD COLUMN IF NOT EXISTS Ciudad TEXT,
+ADD COLUMN IF NOT EXISTS CP TEXT;
+
+CREATE UNIQUE INDEX idx_clientes_dni ON Clientes(DNI);
+ALTER TABLE Clientes ADD CONSTRAINT unique_dni UNIQUE (DNI);

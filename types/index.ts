@@ -23,6 +23,10 @@ export interface Cliente {
   email: string
   telefono: string
   direccion: string
+  dni?: string 
+  provincia?: string 
+  ciudad?: string 
+  cp?: string 
 }
 
 export interface Venta {
@@ -122,4 +126,3 @@ export interface Proveedor {
   direccion?: string
   envio?: number
 }
-
