@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server"
 import { verificarCodigoExiste } from "@/lib/producto-service"
 
-export async function GET(req: Request, { params }: { params: { codigo: string } }) {
+export async function GET(req: Request, { params }: { params: { codigo: Promise<string> | string } }) {
   try {
-    const codigo = params.codigo
+    const codigoParam = await params.codigo
 
-    if (!codigo) {
+    if (!codigoParam) {
       return NextResponse.json({ error: "Código no proporcionado" }, { status: 400 })
     }
 
-    const exists = await verificarCodigoExiste(codigo)
+    const exists = await verificarCodigoExiste(codigoParam)
 
     return NextResponse.json({ exists })
   } catch (error) {

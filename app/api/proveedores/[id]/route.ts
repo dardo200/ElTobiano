@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server"
 import { obtenerProveedorPorId, actualizarProveedor, eliminarProveedor } from "@/lib/proveedor-service"
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, { params }: { params: { id: Promise<string> | string } }) {
   try {
-    const id = Number.parseInt(params.id)
+    const idParam = await params.id
+    const id = Number.parseInt(idParam)
     const proveedor = await obtenerProveedorPorId(id)
 
     if (!proveedor) {
@@ -12,14 +13,15 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 
     return NextResponse.json(proveedor)
   } catch (error) {
-    console.error(`Error al obtener proveedor con id ${params.id}:`, error)
+    console.error(`Error al obtener proveedor:`, error)
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, { params }: { params: { id: Promise<string> | string } }) {
   try {
-    const id = Number.parseInt(params.id)
+    const idParam = await params.id
+    const id = Number.parseInt(idParam)
     const body = await req.json()
     const proveedor = await actualizarProveedor(id, body)
 
@@ -29,14 +31,15 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     return NextResponse.json(proveedor)
   } catch (error) {
-    console.error(`Error al actualizar proveedor con id ${params.id}:`, error)
+    console.error(`Error al actualizar proveedor:`, error)
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, { params }: { params: { id: Promise<string> | string } }) {
   try {
-    const id = Number.parseInt(params.id)
+    const idParam = await params.id
+    const id = Number.parseInt(idParam)
     const success = await eliminarProveedor(id)
 
     if (!success) {
@@ -45,7 +48,7 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error(`Error al eliminar proveedor con id ${params.id}:`, error)
+    console.error(`Error al eliminar proveedor:`, error)
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }

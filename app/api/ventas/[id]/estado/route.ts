@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server"
 import { actualizarEstadoVenta } from "@/lib/venta-service"
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, { params }: { params: { id: Promise<string> | string } }) {
   try {
-    const id = Number.parseInt(params.id)
+    const idParam = await params.id
+    const id = Number.parseInt(idParam)
     const body = await req.json()
     const { estado } = body
 
@@ -33,7 +34,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       throw error
     }
   } catch (error) {
-    console.error(`Error al actualizar estado de venta con id ${params.id}:`, error)
+    console.error(`Error al actualizar estado de venta:`, error)
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }

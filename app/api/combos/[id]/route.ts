@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server"
 import { obtenerComboPorId, actualizarCombo, eliminarCombo } from "@/lib/combo-service"
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, { params }: { params: { id: Promise<string> | string } }) {
   try {
-    const paramsAwait = await params
-    const id = Number.parseInt(paramsAwait.id)
+    const idParam = await params.id
+    const id = Number.parseInt(idParam)
     const combo = await obtenerComboPorId(id)
 
     if (!combo) {
@@ -13,15 +13,15 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 
     return NextResponse.json(combo)
   } catch (error) {
-    console.error(`Error al obtener combo con id ${params.id}:`, error)
+    console.error(`Error al obtener combo:`, error)
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, { params }: { params: { id: Promise<string> | string } }) {
   try {
-    const paramsAwait = await params
-    const id = Number.parseInt(paramsAwait.id)
+    const idParam = await params.id
+    const id = Number.parseInt(idParam)
     const body = await req.json()
     const { detalles, ...comboData } = body
 
@@ -33,15 +33,15 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     return NextResponse.json(combo)
   } catch (error) {
-    console.error(`Error al actualizar combo con id ${params.id}:`, error)
+    console.error(`Error al actualizar combo:`, error)
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, { params }: { params: { id: Promise<string> | string } }) {
   try {
-    const paramsAwait = await params
-    const id = Number.parseInt(paramsAwait.id)
+    const idParam = await params.id
+    const id = Number.parseInt(idParam)
     const success = await eliminarCombo(id)
 
     if (!success) {
@@ -50,7 +50,7 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error(`Error al eliminar combo con id ${params.id}:`, error)
+    console.error(`Error al eliminar combo:`, error)
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }

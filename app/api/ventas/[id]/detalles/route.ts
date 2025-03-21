@@ -2,9 +2,10 @@ import { NextResponse } from "next/server"
 import { actualizarDetallesVenta } from "@/lib/venta-service"
 import type { DetalleVenta } from "@/types"
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: Request, { params }: { params: { id: Promise<string> | string } }) {
   try {
-    const id = Number.parseInt(params.id)
+    const idParam = await params.id
+    const id = Number.parseInt(idParam)
     if (isNaN(id)) {
       return NextResponse.json({ error: "ID de venta inválido" }, { status: 400 })
     }
