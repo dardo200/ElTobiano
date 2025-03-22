@@ -58,7 +58,7 @@ export const EditarCompraForm: React.FC<EditarCompraFormProps> = ({ compra, prov
   const onSubmit = async (data: CompraFormValues) => {
     setIsLoading(true)
     try {
-      const response = await fetch(`/api/compras/${compra.id}`, {
+      const response = await fetch(`/api/compras/detalles?id=${compra.id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",

@@ -48,7 +48,7 @@ export const ProveedorForm: React.FC<ProveedorFormProps> = ({ initialData }) => 
   const onSubmit = async (data: ProveedorFormValues) => {
     setIsLoading(true)
     try {
-      const url = initialData ? `/api/proveedores/${initialData.id}` : "/api/proveedores"
+      const url = initialData ? `/api/proveedores/detalles?id=${initialData.id}` : "/api/proveedores"
 
       const method = initialData ? "PATCH" : "POST"
 

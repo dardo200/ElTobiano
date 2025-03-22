@@ -1,22 +1,16 @@
 import { NextResponse } from "next/server"
 import { obtenerProveedorPorId, actualizarProveedor, eliminarProveedor } from "@/lib/proveedor-service"
 
-// Helper function to extract ID from URL
-function extractIdFromUrl(req: Request): number {
-  const url = new URL(req.url)
-  const pathParts = url.pathname.split("/")
-  const idStr = pathParts[pathParts.length - 1]
-  return Number.parseInt(idStr, 10)
-}
-
 export async function GET(req: Request) {
   try {
-    const id = extractIdFromUrl(req)
+    const { searchParams } = new URL(req.url)
+    const idParam = searchParams.get("id")
 
-    if (isNaN(id)) {
-      return NextResponse.json({ error: "ID de proveedor inválido" }, { status: 400 })
+    if (!idParam) {
+      return NextResponse.json({ error: "ID de proveedor no proporcionado" }, { status: 400 })
     }
 
+    const id = Number.parseInt(idParam)
     const proveedor = await obtenerProveedorPorId(id)
 
     if (!proveedor) {
@@ -32,12 +26,14 @@ export async function GET(req: Request) {
 
 export async function PATCH(req: Request) {
   try {
-    const id = extractIdFromUrl(req)
+    const { searchParams } = new URL(req.url)
+    const idParam = searchParams.get("id")
 
-    if (isNaN(id)) {
-      return NextResponse.json({ error: "ID de proveedor inválido" }, { status: 400 })
+    if (!idParam) {
+      return NextResponse.json({ error: "ID de proveedor no proporcionado" }, { status: 400 })
     }
 
+    const id = Number.parseInt(idParam)
     const body = await req.json()
     const proveedor = await actualizarProveedor(id, body)
 
@@ -54,12 +50,14 @@ export async function PATCH(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
-    const id = extractIdFromUrl(req)
+    const { searchParams } = new URL(req.url)
+    const idParam = searchParams.get("id")
 
-    if (isNaN(id)) {
-      return NextResponse.json({ error: "ID de proveedor inválido" }, { status: 400 })
+    if (!idParam) {
+      return NextResponse.json({ error: "ID de proveedor no proporcionado" }, { status: 400 })
     }
 
+    const id = Number.parseInt(idParam)
     const success = await eliminarProveedor(id)
 
     if (!success) {

@@ -19,7 +19,8 @@ export default function DetalleCompraPage() {
   useEffect(() => {
     const fetchCompra = async () => {
       try {
-        const response = await fetch(`/api/compras/${params.id}`)
+        // Use the new API endpoint with query parameters
+        const response = await fetch(`/api/compras/detalles?id=${params.id}`)
         if (response.ok) {
           const data = await response.json()
           setCompra(data)

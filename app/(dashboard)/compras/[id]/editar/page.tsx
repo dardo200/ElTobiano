@@ -21,7 +21,7 @@ export default function EditarCompraPage() {
     const fetchData = async () => {
       try {
         // Obtener la compra
-        const compraResponse = await fetch(`/api/compras/${params.id}`)
+        const compraResponse = await fetch(`/api/compras/detalles?id=${params.id}`)
         if (!compraResponse.ok) {
           throw new Error("Error al cargar la compra")
         }

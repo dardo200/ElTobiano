@@ -25,7 +25,7 @@ export default function ProveedorPage() {
 
     const fetchProveedor = async () => {
       try {
-        const response = await fetch(`/api/proveedores/${params.id}`)
+        const response = await fetch(`/api/proveedores/detalles?id=${params.id}`)
         if (response.ok) {
           const data = await response.json()
           setProveedor(data)
@@ -49,7 +49,7 @@ export default function ProveedorPage() {
 
     if (confirm("¿Estás seguro de que deseas eliminar este proveedor?")) {
       try {
-        const response = await fetch(`/api/proveedores/${proveedor.id}`, {
+        const response = await fetch(`/api/proveedores/detalles?id=${proveedor.id}`, {
           method: "DELETE",
         })
 
