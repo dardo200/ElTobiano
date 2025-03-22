@@ -6,7 +6,7 @@ import { Switch } from "@/components/ui/switch"
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -50,7 +50,15 @@ interface EditarVentaFormProps {
 export const EditarVentaForm: React.FC<EditarVentaFormProps> = ({ venta, clientes, productos, combos }) => {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
-  const [detalles, setDetalles] = useState<Array<DetalleVenta & { es_combo?: boolean; es_mayorista?: boolean }>>([])
+  const [detalles, setDetalles] = useState<
+    Array<
+      DetalleVenta & {
+        es_combo?: boolean
+        es_mayorista?: boolean
+        combo_modificado?: boolean
+      }
+    >
+  >([])
   const [showAddProductDialog, setShowAddProductDialog] = useState(false)
   const [showAddComboDialog, setShowAddComboDialog] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
@@ -63,6 +71,23 @@ export const EditarVentaForm: React.FC<EditarVentaFormProps> = ({ venta, cliente
   const [detalleToDelete, setDetalleToDelete] = useState<number | null>(null)
   const [total, setTotal] = useState(venta.total || 0)
   const [isMayorista, setIsMayorista] = useState(false)
+  const [comboDetalles, setComboDetalles] = useState<
+    Record<
+      number,
+      Array<{
+        id_producto: number
+        nombre: string
+        cantidad: number
+        codigo?: string
+      }>
+    >
+  >({})
+
+  // Usar un ref para evitar actualizaciones infinitas
+  const detallesRef = useRef(detalles)
+  useEffect(() => {
+    detallesRef.current = detalles
+  }, [detalles])
 
   const form = useForm<VentaFormValues>({
     resolver: zodResolver(formSchema),
@@ -72,23 +97,123 @@ export const EditarVentaForm: React.FC<EditarVentaFormProps> = ({ venta, cliente
     },
   })
 
+  // Añadir este estado para controlar cuándo cargar los detalles de los combos
+  const [shouldLoadComboDetails, setShouldLoadComboDetails] = useState(true)
+
   useEffect(() => {
-    // Inicializar los detalles de la venta
-    if (venta.detalles && venta.detalles.length > 0) {
+    // Inicializar los detalles de la venta solo si no hay detalles cargados
+    if (venta.detalles && venta.detalles.length > 0 && detalles.length === 0) {
       setDetalles(
         venta.detalles.map((detalle) => ({
           ...detalle,
           es_mayorista: detalle.es_mayorista || false,
         })),
       )
+      // Activar la carga de detalles de combos después de inicializar
+      setShouldLoadComboDetails(true)
     }
-  }, [venta])
+  }, [venta, detalles.length])
 
   useEffect(() => {
     // Calcular el total de la venta
     const nuevoTotal = detalles.reduce((sum, detalle) => sum + detalle.precio * detalle.cantidad, 0)
     setTotal(nuevoTotal)
   }, [detalles])
+
+  useEffect(() => {
+    // Cargar detalles de los combos
+    const loadComboDetails = async () => {
+      if (!shouldLoadComboDetails) return
+
+      // Evitar que se vuelva a ejecutar mientras se está procesando
+      setShouldLoadComboDetails(false)
+
+      const combosToLoad = detalles.filter((d) => d.es_combo).map((d) => d.id_producto)
+      if (combosToLoad.length === 0) return
+
+      // Para cada combo, cargar sus detalles
+      const comboDetailsMap: Record<number, any[]> = {}
+      const detallesActualizados = [...detalles]
+      let hayActualizaciones = false
+
+      for (const comboId of combosToLoad) {
+        try {
+          // Buscar si hay un detalle con este combo que tenga datos_combo_modificado
+          const detalleConComboModificado = detalles.find(
+            (d) => d.es_combo && d.id_producto === comboId && d.datos_combo_modificado,
+          )
+
+          if (detalleConComboModificado && detalleConComboModificado.datos_combo_modificado) {
+            // Si es un combo modificado, usar los datos almacenados
+            try {
+              const productosModificados = JSON.parse(detalleConComboModificado.datos_combo_modificado)
+
+              // Obtener información completa de cada producto
+              const productosCompletos = []
+              for (const item of productosModificados) {
+                const producto = productos.find((p) => p.id === item.id_producto)
+                if (producto) {
+                  productosCompletos.push({
+                    id_producto: item.id_producto,
+                    nombre: producto.nombre,
+                    cantidad: item.cantidad,
+                    codigo: producto.codigo || "",
+                  })
+                }
+              }
+
+              comboDetailsMap[comboId] = productosCompletos
+
+              // Marcar este combo como modificado visualmente
+              const index = detallesActualizados.findIndex((d) => d.id === detalleConComboModificado.id)
+              if (index >= 0 && !detallesActualizados[index].combo_modificado) {
+                detallesActualizados[index] = {
+                  ...detallesActualizados[index],
+                  combo_modificado: true,
+                }
+                hayActualizaciones = true
+              }
+            } catch (e) {
+              console.error("Error al parsear datos_combo_modificado:", e)
+            }
+          } else {
+            // Si no es modificado, cargar el combo original
+            const response = await fetch(`/api/combos/${comboId}`)
+            if (response.ok) {
+              const comboData = await response.json()
+              if (comboData.detalles && comboData.detalles.length > 0) {
+                comboDetailsMap[comboId] = comboData.detalles.map((d: any) => ({
+                  id_producto: d.id_producto,
+                  nombre: d.producto?.nombre || `Producto #${d.id_producto}`,
+                  cantidad: d.cantidad,
+                  codigo: d.producto?.codigo || "",
+                }))
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`Error al cargar detalles del combo ${comboId}:`, error)
+        }
+      }
+
+      // Actualizar el estado de comboDetalles una sola vez
+      setComboDetalles(comboDetailsMap)
+
+      // Solo actualizar los detalles si hay cambios
+      if (hayActualizaciones) {
+        setDetalles(detallesActualizados)
+      }
+    }
+
+    if (detalles.length > 0 && shouldLoadComboDetails) {
+      loadComboDetails()
+    }
+  }, [shouldLoadComboDetails, detalles, productos])
+
+  // Añadir este useEffect para activar la carga de detalles cuando cambian los detalles
+  useEffect(() => {
+    setShouldLoadComboDetails(true)
+  }, [venta.id])
 
   useEffect(() => {
     // Filtrar productos según el término de búsqueda
@@ -149,6 +274,19 @@ export const EditarVentaForm: React.FC<EditarVentaFormProps> = ({ venta, cliente
 
       console.log("Basic venta data updated, now updating details. Detalles count:", detalles.length)
 
+      // Asegurarse de que los datos_combo_modificado se preserven
+      const detallesParaEnviar = detalles.map((detalle) => {
+        // Si el detalle original tenía datos_combo_modificado, asegurarse de incluirlo
+        const detalleOriginal = venta.detalles?.find((d) => d.id === detalle.id)
+        if (detalleOriginal && detalleOriginal.datos_combo_modificado) {
+          return {
+            ...detalle,
+            datos_combo_modificado: detalleOriginal.datos_combo_modificado,
+          }
+        }
+        return detalle
+      })
+
       // Luego, actualizar los detalles de la venta
       const detallesUrl = `/api/ventas/detalles?id=${venta.id}`
       console.log("Calling API endpoint:", detallesUrl)
@@ -158,7 +296,7 @@ export const EditarVentaForm: React.FC<EditarVentaFormProps> = ({ venta, cliente
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(detalles),
+        body: JSON.stringify(detallesParaEnviar),
       })
 
       console.log("API response status:", detallesResponse.status)
@@ -385,10 +523,15 @@ export const EditarVentaForm: React.FC<EditarVentaFormProps> = ({ venta, cliente
                   <div key={detalle.id} className="flex justify-between items-center border-b pb-2">
                     <div className="flex-1">
                       <div className="flex items-center">
-                        <p className="font-medium">
+                        <div className="font-medium flex items-center">
                           {detalle.es_combo && (
                             <Badge variant="outline" className="mr-2">
                               Combo
+                            </Badge>
+                          )}
+                          {detalle.combo_modificado && (
+                            <Badge variant="secondary" className="mr-2">
+                              Modificado
                             </Badge>
                           )}
                           {detalle.es_mayorista && (
@@ -396,9 +539,21 @@ export const EditarVentaForm: React.FC<EditarVentaFormProps> = ({ venta, cliente
                               Mayorista
                             </Badge>
                           )}
-                          {detalle.producto?.nombre || `Producto #${detalle.id_producto}`}
-                        </p>
+                          <span>{detalle.producto?.nombre || `Producto #${detalle.id_producto}`}</span>
+                        </div>
                       </div>
+                      {detalle.es_combo && comboDetalles[detalle.id_producto] && (
+                        <div className="mt-1 ml-5 text-xs text-muted-foreground">
+                          <p className="font-medium mb-1">Productos en este combo:</p>
+                          <ul className="list-disc pl-4">
+                            {comboDetalles[detalle.id_producto].map((producto, idx) => (
+                              <li key={idx}>
+                                {producto.nombre} ({producto.cantidad} {producto.cantidad > 1 ? "unidades" : "unidad"})
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                       <p className="text-sm text-muted-foreground">Precio: ${detalle.precio?.toFixed(2) || "0.00"}</p>
                     </div>
                     <div className="flex items-center space-x-2">

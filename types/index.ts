@@ -23,10 +23,10 @@ export interface Cliente {
   email: string
   telefono: string
   direccion: string
-  dni?: string 
-  provincia?: string 
-  ciudad?: string 
-  cp?: string 
+  dni?: string // Nuevo campo DNI
+  provincia?: string // Nuevo campo Provincia
+  ciudad?: string // Nuevo campo Ciudad
+  cp?: string // Nuevo campo Código Postal
 }
 
 export interface Venta {
@@ -46,9 +46,17 @@ export interface DetalleVenta {
   id_producto: number
   cantidad: number
   precio: number
-  producto?: Producto
+  producto?: {
+    id: number
+    nombre: string
+    precio: number
+    descripcion?: string
+    codigo?: string
+  }
   es_combo?: boolean
   es_mayorista?: boolean
+  datos_combo_modificado?: string // Campo para almacenar los detalles de un combo modificado
+  combo_modificado?: boolean // Propiedad para indicar si el combo ha sido modificado
 }
 
 export interface Compra {
@@ -126,3 +134,4 @@ export interface Proveedor {
   direccion?: string
   envio?: number
 }
+

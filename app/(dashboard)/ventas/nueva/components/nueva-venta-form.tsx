@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { Loader2, Plus, Trash, Tag, Barcode } from "lucide-react"
+import { Loader2, Plus, Trash, Tag, Barcode, Save, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
@@ -19,6 +19,8 @@ import { Label } from "@/components/ui/label"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import type { Cliente, Producto, Combo } from "@/types"
 import { toast } from "@/components/ui/use-toast"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 
 const formSchema = z.object({
   id_cliente: z.string().optional(),
@@ -50,6 +52,15 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
   const [searchCode, setSearchCode] = useState("")
   const [activeTabsState, setActiveTabsState] = useState<Record<number, "producto" | "combo">>({})
   const [isMayorista, setIsMayorista] = useState(false)
+  const [editingComboIndex, setEditingComboIndex] = useState<number | null>(null)
+  const [editingComboItems, setEditingComboItems] = useState<Array<{ id: number; nombre: string; cantidad: number }>>(
+    [],
+  )
+  const [updateOriginalCombo, setUpdateOriginalCombo] = useState(false)
+  const [modifiedCombos, setModifiedCombos] = useState<Record<string, { items: any[]; newPrice: number }>>({})
+  const [showAddProductDialog, setShowAddProductDialog] = useState(false)
+  const [selectedProductId, setSelectedProductId] = useState<string>("")
+  const [productQuantity, setProductQuantity] = useState<number>(1)
 
   // Convertir clientes a opciones para el Combobox
   const clienteOptions: ComboboxOption[] = [
@@ -145,7 +156,42 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
         form.setValue(`detalles.${index}.es_combo`, true)
         form.setValue(`detalles.${index}.tipo`, "combo")
         form.setValue(`detalles.${index}.es_mayorista`, false)
+
+        // Cargar automáticamente los detalles del combo
+        fetchComboDetails(index, id_producto)
       }
+    }
+  }
+
+  const fetchComboDetails = async (index: number, comboId: string) => {
+    try {
+      // Fetch combo details
+      const response = await fetch(`/api/combos/${comboId}`)
+      if (!response.ok) {
+        toast.error("Error al obtener detalles del combo")
+        return
+      }
+
+      const combo = await response.json()
+
+      // If we already have a modified version of this combo, use that
+      if (modifiedCombos[comboId]) {
+        setEditingComboItems(modifiedCombos[comboId].items)
+      } else {
+        // Otherwise use the original combo items
+        const comboItems = combo.detalles.map((item) => ({
+          id: item.id_producto,
+          nombre: item.producto?.nombre || `Producto #${item.id_producto}`,
+          cantidad: item.cantidad,
+        }))
+        setEditingComboItems(comboItems)
+      }
+
+      // Set this combo as the one being edited
+      setEditingComboIndex(index)
+    } catch (error) {
+      console.error("Error al obtener detalles del combo:", error)
+      toast.error("Error al obtener detalles del combo")
     }
   }
 
@@ -243,20 +289,43 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
       // Calcular el total
       const total = calcularTotal()
 
-      // Preparar los datos para la API
+      // Prepare the data for the API
       const ventaData = {
         id_cliente: data.id_cliente && data.id_cliente !== "null" ? Number.parseInt(data.id_cliente) : null,
         fecha: new Date().toISOString(),
         total,
         cerrado: false,
         estado: "Pendiente",
-        detalles: data.detalles.map((detalle) => ({
-          id_producto: Number.parseInt(detalle.id_producto),
-          cantidad: detalle.cantidad,
-          precio: detalle.precio,
-          es_combo: detalle.es_combo,
-          es_mayorista: detalle.es_mayorista,
-        })),
+        detalles: data.detalles.map((detalle) => {
+          // If this is a modified combo, we need to handle it differently
+          if (detalle.es_combo && modifiedCombos[detalle.id_producto]) {
+            // If we're not updating the original combo, we need to create individual product entries
+            if (!updateOriginalCombo) {
+              // Return the modified combo items as individual products
+              return {
+                id_producto: Number.parseInt(detalle.id_producto),
+                cantidad: detalle.cantidad,
+                precio: detalle.precio,
+                es_combo: detalle.es_combo,
+                es_mayorista: detalle.es_mayorista,
+                combo_modificado: true,
+                items: modifiedCombos[detalle.id_producto].items.map((item) => ({
+                  id_producto: item.id,
+                  cantidad: item.cantidad * detalle.cantidad, // Multiply by the combo quantity
+                })),
+              }
+            }
+          }
+
+          // Regular product or unmodified combo
+          return {
+            id_producto: Number.parseInt(detalle.id_producto),
+            cantidad: detalle.cantidad,
+            precio: detalle.precio,
+            es_combo: detalle.es_combo,
+            es_mayorista: detalle.es_mayorista,
+          }
+        }),
       }
 
       const response = await fetch("/api/ventas", {
@@ -319,223 +388,509 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
     })
   }
 
+  const handleEditCombo = async (index: number) => {
+    const comboId = form.getValues(`detalles.${index}.id_producto`)
+    if (!comboId) return
+
+    // If we're already editing this combo, toggle it off
+    if (editingComboIndex === index) {
+      setEditingComboIndex(null)
+      return
+    }
+
+    fetchComboDetails(index, comboId)
+  }
+
+  const handleSaveComboChanges = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const comboId = form.getValues(`detalles.${editingComboIndex}.id_producto`)
+    if (!comboId) return
+
+    // Calculate new price based on the modified items
+    const calculateNewPrice = async () => {
+      try {
+        // Get prices for all products in the combo
+        const productPromises = editingComboItems.map(async (item) => {
+          const productResponse = await fetch(`/api/productos/${item.id}`)
+          if (!productResponse.ok) throw new Error(`Error fetching product ${item.id}`)
+          const product = await productResponse.json()
+          return {
+            ...item,
+            precio: product.precio,
+          }
+        })
+
+        const productsWithPrices = await Promise.all(productPromises)
+
+        // Calculate new price (simple sum of all products)
+        const newPrice = productsWithPrices.reduce((total, item) => {
+          return total + item.precio * item.cantidad
+        }, 0)
+
+        // Store the modified combo
+        setModifiedCombos({
+          ...modifiedCombos,
+          [comboId]: {
+            items: editingComboItems,
+            newPrice: newPrice,
+          },
+        })
+
+        // Update the price in the form
+        form.setValue(`detalles.${editingComboIndex}.precio`, newPrice)
+
+        toast.success("Combo modificado correctamente")
+
+        // If user wants to update the original combo
+        if (updateOriginalCombo) {
+          // Call API to update the combo
+          const updateResponse = await fetch(`/api/combos/${comboId}`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              detalles: editingComboItems.map((item) => ({
+                id_producto: item.id,
+                cantidad: item.cantidad,
+              })),
+              precio_venta: newPrice,
+            }),
+          })
+
+          if (updateResponse.ok) {
+            toast.success("Combo original actualizado correctamente")
+          } else {
+            toast.error("Error al actualizar el combo original")
+          }
+        }
+      } catch (error) {
+        console.error("Error al calcular nuevo precio:", error)
+        toast.error("Error al calcular nuevo precio")
+      }
+    }
+
+    calculateNewPrice()
+    setEditingComboIndex(null)
+  }
+
+  const handleAddProductToCombo = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setSelectedProductId("")
+    setProductQuantity(1)
+    setShowAddProductDialog(true)
+  }
+
+  const handleConfirmAddProduct = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    if (!selectedProductId) {
+      toast.error("Debe seleccionar un producto")
+      return
+    }
+
+    const producto = productos.find((p) => p.id.toString() === selectedProductId)
+    if (!producto) {
+      toast.error("Producto no encontrado")
+      return
+    }
+
+    setEditingComboItems([
+      ...editingComboItems,
+      {
+        id: producto.id,
+        nombre: producto.nombre,
+        cantidad: productQuantity,
+      },
+    ])
+
+    setShowAddProductDialog(false)
+    toast.success(`Producto ${producto.nombre} agregado al combo`)
+  }
+
+  const handleRemoveProductFromCombo = (productIndex: number, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+
+    const newItems = [...editingComboItems]
+    newItems.splice(productIndex, 1)
+    setEditingComboItems(newItems)
+  }
+
+  const handleUpdateQuantity = (productIndex: number, newQuantity: number, e?: React.ChangeEvent<HTMLInputElement>) => {
+    if (e) {
+      e.stopPropagation()
+    }
+
+    const newItems = editingComboItems.map((item, index) => {
+      if (index === productIndex) {
+        return { ...item, cantidad: newQuantity }
+      }
+      return item
+    })
+
+    setEditingComboItems(newItems)
+  }
+
+  // Función para cerrar el diálogo de manera segura
+  const handleCloseDialog = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+    setShowAddProductDialog(false)
+  }
+
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 w-full">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <FormField
-            control={form.control}
-            name="id_cliente"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Cliente</FormLabel>
-                <FormControl>
-                  <Combobox
-                    options={clienteOptions}
-                    value={field.value || ""}
-                    onChange={field.onChange}
-                    placeholder="Seleccionar cliente"
-                    emptyMessage="No se encontraron clientes"
-                    disabled={isLoading}
-                    searchPlaceholder="Buscar por nombre, DNI, email..."
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <div className="flex items-center space-x-2">
-            <Switch id="precio-mayorista" checked={isMayorista} onCheckedChange={handleMayoristaChange} />
-            <Label htmlFor="precio-mayorista">Usar precios mayoristas</Label>
-          </div>
-        </div>
-
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 mb-4">
-          <Input
-            placeholder="Escanear código de barras"
-            value={searchCode}
-            onChange={(e) => setSearchCode(e.target.value)}
-            className="w-full sm:max-w-xs"
-          />
-          <Button type="button" onClick={handleSearchByCode} disabled={!searchCode} className="w-full sm:w-auto">
-            <Barcode className="mr-2 h-4 w-4" />
-            Buscar
-          </Button>
-        </div>
-
-        <div>
-          <h3 className="text-lg font-medium mb-4">Productos</h3>
-          {fields.map((field, index) => {
-            const activeTab = activeTabsState[index] || watchDetalles[index].tipo || "producto"
-
-            return (
-              <Card key={field.id} className="mb-4">
-                <CardContent className="pt-4">
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-                    <div className="sm:col-span-2">
-                      <Tabs
-                        value={activeTab}
-                        onValueChange={(value) => handleTabChange(index, value as "producto" | "combo")}
-                      >
-                        <TabsList className="grid w-full grid-cols-2">
-                          <TabsTrigger value="producto">Productos</TabsTrigger>
-                          <TabsTrigger value="combo">Combos</TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="producto">
-                          <FormField
-                            control={form.control}
-                            name={`detalles.${index}.id_producto`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Producto</FormLabel>
-                                <div className="flex gap-2 w-full">
-                                  <FormControl className="flex-1">
-                                    <Combobox
-                                      options={productoOptions}
-                                      value={field.value}
-                                      onChange={(value) => {
-                                        field.onChange(value)
-                                        handleProductoChange(index, value, "producto")
-                                      }}
-                                      placeholder="Seleccionar producto"
-                                      emptyMessage="No se encontraron productos"
-                                      disabled={isLoading}
-                                      searchPlaceholder="Buscar por nombre, código..."
-                                    />
-                                  </FormControl>
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="icon"
-                                    onClick={() => handleScanBarcode(index)}
-                                  >
-                                    <Tag className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </TabsContent>
-                        <TabsContent value="combo">
-                          <FormField
-                            control={form.control}
-                            name={`detalles.${index}.id_producto`}
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Combo</FormLabel>
-                                <div className="flex gap-2 w-full">
-                                  <FormControl className="flex-1">
-                                    <Combobox
-                                      options={comboOptions}
-                                      value={field.value}
-                                      onChange={(value) => {
-                                        field.onChange(value)
-                                        handleProductoChange(index, value, "combo")
-                                      }}
-                                      placeholder="Seleccionar combo"
-                                      emptyMessage="No se encontraron combos"
-                                      disabled={isLoading}
-                                      searchPlaceholder="Buscar por nombre, código..."
-                                    />
-                                  </FormControl>
-                                </div>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </TabsContent>
-                      </Tabs>
-                    </div>
-                    <FormField
-                      control={form.control}
-                      name={`detalles.${index}.cantidad`}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Cantidad</FormLabel>
-                          <FormControl>
-                            <Input type="number" min="1" disabled={isLoading} {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
+    <div className="combo-form-container">
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 w-full">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="id_cliente"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Cliente</FormLabel>
+                  <FormControl>
+                    <Combobox
+                      options={clienteOptions}
+                      value={field.value || ""}
+                      onChange={field.onChange}
+                      placeholder="Seleccionar cliente"
+                      emptyMessage="No se encontraron clientes"
+                      disabled={isLoading}
+                      searchPlaceholder="Buscar por nombre, DNI, email..."
                     />
-                    <FormField
-                      control={form.control}
-                      name={`detalles.${index}.precio`}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Precio</FormLabel>
-                          <FormControl>
-                            <Input type="number" step="0.01" disabled={isLoading} {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <div className="flex items-end justify-end sm:justify-start">
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="icon"
-                        onClick={() => remove(index)}
-                        disabled={isLoading || fields.length === 1}
-                        className="h-10 w-10"
-                      >
-                        <Trash className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              append({
-                id_producto: "",
-                cantidad: 1,
-                precio: 0,
-                es_combo: false,
-                tipo: "producto",
-                es_mayorista: isMayorista,
-              })
-            }
-            disabled={isLoading}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Agregar Producto
-          </Button>
-        </div>
-
-        <div className="bg-muted p-4 rounded-md">
-          <div className="flex justify-between text-lg font-bold">
-            <span>Total:</span>
-            <span>${calcularTotal().toFixed(2)}</span>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="flex items-center space-x-2">
+              <Switch id="precio-mayorista" checked={isMayorista} onCheckedChange={handleMayoristaChange} />
+              <Label htmlFor="precio-mayorista">Usar precios mayoristas</Label>
+            </div>
           </div>
-        </div>
 
-        <Separator />
-        <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => router.push("/ventas")}
-            className="w-full sm:w-auto"
-            disabled={isLoading}
-          >
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={isLoading} className="w-full sm:w-auto">
-            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Crear Venta
-          </Button>
-        </div>
-      </form>
-    </Form>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 mb-4">
+            <Input
+              placeholder="Escanear código de barras"
+              value={searchCode}
+              onChange={(e) => setSearchCode(e.target.value)}
+              className="w-full sm:max-w-xs"
+            />
+            <Button type="button" onClick={handleSearchByCode} disabled={!searchCode} className="w-full sm:w-auto">
+              <Barcode className="mr-2 h-4 w-4" />
+              Buscar
+            </Button>
+          </div>
+
+          <div>
+            <h3 className="text-lg font-medium mb-4">Productos</h3>
+            {fields.map((field, index) => {
+              const selectedCombo =
+                watchDetalles[index].id_producto && watchDetalles[index].es_combo
+                  ? combos.find((c) => c.id.toString() === watchDetalles[index].id_producto)
+                  : null
+
+              return (
+                <Card key={field.id} className="mb-4">
+                  <CardContent className="pt-4">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                      <div className="sm:col-span-2">
+                        <Tabs
+                          value={activeTabsState[index] || watchDetalles[index].tipo || "producto"}
+                          onValueChange={(value) => handleTabChange(index, value as "producto" | "combo")}
+                        >
+                          <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="producto">Productos</TabsTrigger>
+                            <TabsTrigger value="combo">Combos</TabsTrigger>
+                          </TabsList>
+                          <TabsContent value="producto">
+                            <FormField
+                              control={form.control}
+                              name={`detalles.${index}.id_producto`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Producto</FormLabel>
+                                  <div className="flex gap-2 w-full">
+                                    <FormControl className="flex-1">
+                                      <Combobox
+                                        options={productoOptions}
+                                        value={field.value}
+                                        onChange={(value) => {
+                                          field.onChange(value)
+                                          handleProductoChange(index, value, "producto")
+                                        }}
+                                        placeholder="Seleccionar producto"
+                                        emptyMessage="No se encontraron productos"
+                                        disabled={isLoading}
+                                        searchPlaceholder="Buscar por nombre, código..."
+                                      />
+                                    </FormControl>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="icon"
+                                      onClick={() => handleScanBarcode(index)}
+                                    >
+                                      <Tag className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </TabsContent>
+                          <TabsContent value="combo">
+                            <FormField
+                              control={form.control}
+                              name={`detalles.${index}.id_producto`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Combo</FormLabel>
+                                  <div className="flex gap-2 w-full">
+                                    <FormControl className="flex-1">
+                                      <Combobox
+                                        options={comboOptions}
+                                        value={field.value}
+                                        onChange={(value) => {
+                                          field.onChange(value)
+                                          handleProductoChange(index, value, "combo")
+                                        }}
+                                        placeholder="Seleccionar combo"
+                                        emptyMessage="No se encontraron combos"
+                                        disabled={isLoading}
+                                        searchPlaceholder="Buscar por nombre, código..."
+                                      />
+                                    </FormControl>
+                                  </div>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </TabsContent>
+                        </Tabs>
+                      </div>
+                      <FormField
+                        control={form.control}
+                        name={`detalles.${index}.cantidad`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Cantidad</FormLabel>
+                            <FormControl>
+                              <Input type="number" min="1" disabled={isLoading} {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name={`detalles.${index}.precio`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Precio</FormLabel>
+                            <FormControl>
+                              <Input type="number" step="0.01" disabled={isLoading} {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <div className="flex items-end justify-end sm:justify-start">
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="icon"
+                          onClick={() => remove(index)}
+                          disabled={isLoading || fields.length === 1}
+                          className="h-10 w-10"
+                        >
+                          <Trash className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Show combo items if this is a combo */}
+                    {watchDetalles[index].es_combo && editingComboIndex === index && (
+                      <div className="mt-4 border-t pt-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-medium">Contenido del combo</h4>
+                          <div className="flex items-center space-x-4">
+                            <div className="flex items-center space-x-2">
+                              <Switch
+                                id={`update-original-${index}`}
+                                checked={updateOriginalCombo}
+                                onCheckedChange={setUpdateOriginalCombo}
+                              />
+                              <Label htmlFor={`update-original-${index}`}>Actualizar combo original</Label>
+                            </div>
+                            <Button type="button" variant="outline" onClick={handleAddProductToCombo} size="sm">
+                              <Plus className="mr-2 h-4 w-4" />
+                              Agregar Producto
+                            </Button>
+                            <Button type="button" onClick={handleSaveComboChanges} size="sm">
+                              <Save className="mr-2 h-4 w-4" />
+                              Guardar Cambios
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="rounded-md border">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Producto</TableHead>
+                                <TableHead>Cantidad</TableHead>
+                                <TableHead className="w-[100px]">Acciones</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {editingComboItems.map((item, itemIndex) => (
+                                <TableRow key={itemIndex}>
+                                  <TableCell>{item.nombre}</TableCell>
+                                  <TableCell>
+                                    <Input
+                                      type="number"
+                                      min="1"
+                                      value={item.cantidad}
+                                      onChange={(e) =>
+                                        handleUpdateQuantity(itemIndex, Number.parseInt(e.target.value), e)
+                                      }
+                                      className="w-20"
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <Button
+                                      type="button"
+                                      variant="destructive"
+                                      size="sm"
+                                      onClick={(e) => handleRemoveProductFromCombo(itemIndex, e)}
+                                    >
+                                      <Trash className="h-4 w-4" />
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                              {editingComboItems.length === 0 && (
+                                <TableRow>
+                                  <TableCell colSpan={3} className="text-center py-4 text-muted-foreground">
+                                    No hay productos en este combo. Agrega algunos productos.
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )
+            })}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                append({
+                  id_producto: "",
+                  cantidad: 1,
+                  precio: 0,
+                  es_combo: false,
+                  tipo: "producto",
+                  es_mayorista: isMayorista,
+                })
+              }
+              disabled={isLoading}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Agregar Producto
+            </Button>
+          </div>
+
+          <div className="bg-muted p-4 rounded-md">
+            <div className="flex justify-between text-lg font-bold">
+              <span>Total:</span>
+              <span>${calcularTotal().toFixed(2)}</span>
+            </div>
+          </div>
+
+          <Separator />
+          <div className="flex flex-col sm:flex-row gap-2 sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => router.push("/ventas")}
+              className="w-full sm:w-auto"
+              disabled={isLoading}
+            >
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={isLoading} className="w-full sm:w-auto">
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Crear Venta
+            </Button>
+          </div>
+        </form>
+      </Form>
+
+      {/* Dialog para agregar producto al combo */}
+      <Dialog open={showAddProductDialog} onOpenChange={(open) => !open && handleCloseDialog()}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Agregar producto al combo</DialogTitle>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="absolute right-4 top-4"
+              onClick={handleCloseDialog}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="producto">Producto</Label>
+              <Combobox
+                options={productoOptions}
+                value={selectedProductId}
+                onChange={setSelectedProductId}
+                placeholder="Seleccionar producto"
+                emptyMessage="No se encontraron productos"
+                searchPlaceholder="Buscar por nombre, código..."
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="cantidad">Cantidad</Label>
+              <Input
+                id="cantidad"
+                type="number"
+                min="1"
+                value={productQuantity}
+                onChange={(e) => setProductQuantity(Number.parseInt(e.target.value))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={handleCloseDialog}>
+              Cancelar
+            </Button>
+            <Button type="button" onClick={handleConfirmAddProduct}>
+              Agregar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   )
 }
 

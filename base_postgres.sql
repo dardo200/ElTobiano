@@ -173,3 +173,12 @@ ADD COLUMN IF NOT EXISTS CP TEXT;
 
 CREATE UNIQUE INDEX idx_clientes_dni ON Clientes(DNI);
 ALTER TABLE Clientes ADD CONSTRAINT unique_dni UNIQUE (DNI);
+
+
+
+-- Agregar el campo datos_combo_modificado a la tabla DetalleVentas
+ALTER TABLE "DetalleVentas" 
+ADD COLUMN "datos_combo_modificado" TEXT;
+
+-- Comentario para documentar el propósito del campo
+COMMENT ON COLUMN "DetalleVentas"."datos_combo_modificado" IS 'Almacena en formato JSON los productos y cantidades de un combo modificado';

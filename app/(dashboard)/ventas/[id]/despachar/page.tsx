@@ -66,34 +66,89 @@ export default function DespacharVentaPage() {
                   es_combo: false,
                 })
               } else {
-                // Si es un combo, obtener sus productos
-                try {
-                  const comboResponse = await fetch(`/api/combos/${detalle.id_producto}`)
-                  if (comboResponse.ok) {
-                    const comboData = await comboResponse.json()
-
-                    // Crear un array para los productos del combo
+                // Verificar si es un combo modificado
+                if (detalle.datos_combo_modificado) {
+                  try {
+                    // Parse los datos del combo modificado
+                    const comboItems = JSON.parse(detalle.datos_combo_modificado)
                     const productosCombo: ProductoCombo[] = []
 
-                    // Si el combo tiene detalles, procesarlos
-                    if (comboData.detalles && comboData.detalles.length > 0) {
-                      // Para cada detalle del combo, obtener el producto completo
-                      for (const detalleCombo of comboData.detalles) {
-                        // Obtener información completa del producto
-                        try {
-                          const productoResponse = await fetch(`/api/productos/${detalleCombo.id_producto}`)
-                          if (productoResponse.ok) {
-                            const productoData = await productoResponse.json()
+                    // Para cada producto en el combo modificado
+                    for (const item of comboItems) {
+                      try {
+                        // Obtener la información del producto
+                        const productoResponse = await fetch(`/api/productos/${item.id_producto}`)
+                        if (productoResponse.ok) {
+                          const productoData = await productoResponse.json()
 
-                            productosCombo.push({
-                              id: detalleCombo.id_producto,
-                              nombre: productoData.nombre || `Producto #${detalleCombo.id_producto}`,
-                              codigo: productoData.codigo || "",
-                              cantidad: detalleCombo.cantidad * detalle.cantidad, // Multiplicar por la cantidad del combo
-                              verificado: false,
-                            })
-                          } else {
-                            // Si hay error al obtener el producto, usar la información básica
+                          productosCombo.push({
+                            id: item.id_producto,
+                            nombre: productoData.nombre || `Producto #${item.id_producto}`,
+                            codigo: productoData.codigo || "",
+                            cantidad: item.cantidad * detalle.cantidad,
+                            verificado: false,
+                          })
+                        }
+                      } catch (error) {
+                        console.error(`Error al obtener detalles del producto ${item.id_producto}:`, error)
+                      }
+                    }
+
+                    // Agregar el combo modificado
+                    productosParaVerificar.push({
+                      id: detalle.id,
+                      id_producto: detalle.id_producto,
+                      nombre: `${detalle.producto?.nombre || `Combo #${detalle.id_producto}`} (Modificado)`,
+                      codigo: detalle.producto?.codigo || "",
+                      cantidad: detalle.cantidad,
+                      verificado: false,
+                      es_combo: true,
+                      productos_combo: productosCombo,
+                      expandido: false,
+                    })
+                  } catch (error) {
+                    console.error("Error al procesar combo modificado:", error)
+                  }
+                } else {
+                  // Es un combo normal, procesar como antes
+                  try {
+                    const comboResponse = await fetch(`/api/combos/${detalle.id_producto}`)
+                    if (comboResponse.ok) {
+                      const comboData = await comboResponse.json()
+
+                      // Crear un array para los productos del combo
+                      const productosCombo: ProductoCombo[] = []
+
+                      // Si el combo tiene detalles, procesarlos
+                      if (comboData.detalles && comboData.detalles.length > 0) {
+                        // Para cada detalle del combo, obtener el producto completo
+                        for (const detalleCombo of comboData.detalles) {
+                          // Obtener información completa del producto
+                          try {
+                            const productoResponse = await fetch(`/api/productos/${detalleCombo.id_producto}`)
+                            if (productoResponse.ok) {
+                              const productoData = await productoResponse.json()
+
+                              productosCombo.push({
+                                id: detalleCombo.id_producto,
+                                nombre: productoData.nombre || `Producto #${detalleCombo.id_producto}`,
+                                codigo: productoData.codigo || "",
+                                cantidad: detalleCombo.cantidad * detalle.cantidad, // Multiplicar por la cantidad del combo
+                                verificado: false,
+                              })
+                            } else {
+                              // Si hay error al obtener el producto, usar la información básica
+                              productosCombo.push({
+                                id: detalleCombo.id_producto,
+                                nombre: detalleCombo.producto?.nombre || `Producto #${detalleCombo.id_producto}`,
+                                codigo: detalleCombo.producto?.codigo || "",
+                                cantidad: detalleCombo.cantidad * detalle.cantidad,
+                                verificado: false,
+                              })
+                            }
+                          } catch (error) {
+                            console.error("Error al obtener detalles del producto:", error)
+                            // Si hay error, usar la información básica
                             productosCombo.push({
                               id: detalleCombo.id_producto,
                               nombre: detalleCombo.producto?.nombre || `Producto #${detalleCombo.id_producto}`,
@@ -102,46 +157,36 @@ export default function DespacharVentaPage() {
                               verificado: false,
                             })
                           }
-                        } catch (error) {
-                          console.error("Error al obtener detalles del producto:", error)
-                          // Si hay error, usar la información básica
-                          productosCombo.push({
-                            id: detalleCombo.id_producto,
-                            nombre: detalleCombo.producto?.nombre || `Producto #${detalleCombo.id_producto}`,
-                            codigo: detalleCombo.producto?.codigo || "",
-                            cantidad: detalleCombo.cantidad * detalle.cantidad,
-                            verificado: false,
-                          })
                         }
                       }
-                    }
 
-                    // Agregar el combo con sus productos
+                      // Agregar el combo con sus productos
+                      productosParaVerificar.push({
+                        id: detalle.id,
+                        id_producto: detalle.id_producto,
+                        nombre: comboData.nombre || `Combo #${detalle.id_producto}`,
+                        codigo: comboData.codigo || "",
+                        cantidad: detalle.cantidad,
+                        verificado: false,
+                        es_combo: true,
+                        productos_combo: productosCombo,
+                        expandido: false,
+                      })
+                    }
+                  } catch (error) {
+                    console.error("Error al obtener detalles del combo:", error)
+                    // Si hay error, agregar el combo sin detalles
                     productosParaVerificar.push({
                       id: detalle.id,
                       id_producto: detalle.id_producto,
-                      nombre: comboData.nombre || `Combo #${detalle.id_producto}`,
-                      codigo: comboData.codigo || "",
+                      nombre: `Combo #${detalle.id_producto}`,
+                      codigo: "",
                       cantidad: detalle.cantidad,
                       verificado: false,
                       es_combo: true,
-                      productos_combo: productosCombo,
-                      expandido: false,
+                      productos_combo: [],
                     })
                   }
-                } catch (error) {
-                  console.error("Error al obtener detalles del combo:", error)
-                  // Si hay error, agregar el combo sin detalles
-                  productosParaVerificar.push({
-                    id: detalle.id,
-                    id_producto: detalle.id_producto,
-                    nombre: `Combo #${detalle.id_producto}`,
-                    codigo: "",
-                    cantidad: detalle.cantidad,
-                    verificado: false,
-                    es_combo: true,
-                    productos_combo: [],
-                  })
                 }
               }
             }
@@ -406,6 +451,11 @@ export default function DespacharVentaPage() {
                         <div>
                           <div className="flex items-center">
                             <p className="font-medium">{producto.nombre}</p>
+                            {producto.nombre.includes("(Modificado)") && (
+                              <Badge variant="outline" className="ml-2 bg-orange-100 text-orange-800 border-orange-300">
+                                Modificado
+                              </Badge>
+                            )}
                             {producto.es_combo && (
                               <Button
                                 variant="ghost"

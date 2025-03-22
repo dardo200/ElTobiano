@@ -47,28 +47,29 @@ export async function obtenerVentaPorId(id: number): Promise<Venta | null> {
       // Obtener los detalles de la venta
       const detallesResult = await client.query(
         `
-        SELECT 
-          dv.*, 
-          CASE 
-            WHEN dv.es_combo = false THEN p.nombre 
-            WHEN dv.es_combo = true THEN cb.nombre 
-            ELSE NULL 
-          END as producto_nombre,
-          CASE 
-            WHEN dv.es_combo = false THEN p.descripcion 
-            WHEN dv.es_combo = true THEN cb.descripcion 
-            ELSE NULL 
-          END as producto_descripcion,
-          CASE 
-            WHEN dv.es_combo = false THEN p.codigo 
-            WHEN dv.es_combo = true THEN cb.codigo 
-            ELSE NULL 
-          END as producto_codigo
-        FROM DetalleVentas dv
-        LEFT JOIN Productos p ON dv.id_producto = p.id AND dv.es_combo = false
-        LEFT JOIN Combos cb ON dv.id_producto = cb.id AND dv.es_combo = true
-        WHERE dv.id_venta = $1
-      `,
+  SELECT 
+    dv.*, 
+    CASE 
+      WHEN dv.es_combo = false THEN p.nombre 
+      WHEN dv.es_combo = true THEN cb.nombre 
+      ELSE NULL 
+    END as producto_nombre,
+    CASE 
+      WHEN dv.es_combo = false THEN p.descripcion 
+      WHEN dv.es_combo = true THEN cb.descripcion 
+      ELSE NULL 
+    END as producto_descripcion,
+    CASE 
+      WHEN dv.es_combo = false THEN p.codigo 
+      WHEN dv.es_combo = true THEN cb.codigo 
+      ELSE NULL 
+    END as producto_codigo,
+    dv.datos_combo_modificado
+  FROM DetalleVentas dv
+  LEFT JOIN Productos p ON dv.id_producto = p.id AND dv.es_combo = false
+  LEFT JOIN Combos cb ON dv.id_producto = cb.id AND dv.es_combo = true
+  WHERE dv.id_venta = $1
+`,
         [id],
       )
 
@@ -110,7 +111,13 @@ export async function obtenerVentaPorId(id: number): Promise<Venta | null> {
 // Modificar la función crearVenta para manejar el estado automático según el stock
 export async function crearVenta(
   venta: Omit<Venta, "id">,
-  detalles: Array<Omit<DetalleVenta, "id" | "id_venta"> & { es_combo?: boolean }>,
+  detalles: Array<
+    Omit<DetalleVenta, "id" | "id_venta"> & {
+      es_combo?: boolean
+      combo_modificado?: boolean
+      items?: { id_producto: number; cantidad: number }[]
+    }
+  >,
 ): Promise<Venta> {
   try {
     const client = await import("./db").then((module) => module.getClient())
@@ -200,8 +207,40 @@ export async function crearVenta(
       // Insertar los detalles de la venta
       console.log("Insertando detalles de la venta")
       for (const detalle of detalles) {
-        // Verificar si es un combo antes de insertar
-        if (detalle.es_combo) {
+        console.log("Procesando detalle:", detalle)
+
+        // Check if this is a modified combo
+        if (detalle.es_combo && detalle.combo_modificado && detalle.items) {
+          console.log("Procesando combo modificado:", detalle)
+
+          // Insert the detail as a combo and store the modified combo information
+          const detalleVentaResult = await client.query(
+            "INSERT INTO DetalleVentas (id_venta, id_producto, cantidad, precio, es_combo, datos_combo_modificado) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
+            [
+              nuevaVenta.id,
+              detalle.id_producto,
+              detalle.cantidad,
+              detalle.precio,
+              true,
+              JSON.stringify(
+                detalle.items.map((item) => ({
+                  id_producto: item.id_producto,
+                  cantidad: item.cantidad,
+                })),
+              ),
+            ],
+          )
+
+          // Process each item in the modified combo
+          for (const item of detalle.items) {
+            // Update stock for each product in the modified combo
+            await client.query("UPDATE Productos SET stock = stock - $1 WHERE id = $2", [
+              item.cantidad,
+              item.id_producto,
+            ])
+          }
+        } else if (detalle.es_combo) {
+          // Original code for handling combos
           // Verificar que el combo exista
           const comboCheck = await client.query("SELECT id FROM Combos WHERE id = $1", [detalle.id_producto])
           if (comboCheck.rows.length === 0) {
@@ -238,6 +277,7 @@ export async function crearVenta(
             ])
           }
         } else {
+          // Original code for handling products
           // Verificar que el producto exista
           const productoCheck = await client.query("SELECT id FROM Productos WHERE id = $1", [detalle.id_producto])
           if (productoCheck.rows.length === 0) {
@@ -686,6 +726,47 @@ export async function actualizarDetallesVenta(
   } catch (error) {
     console.error(`Error al actualizar detalles de venta con id ${id}:`, error)
     throw error
+  }
+}
+
+// Agregar al final del archivo
+export async function obtenerDetallesComboModificado(detalle: DetalleVenta): Promise<any[]> {
+  if (!detalle.es_combo || !detalle.datos_combo_modificado) {
+    return []
+  }
+
+  try {
+    // Parsear los datos del combo modificado
+    const items = JSON.parse(detalle.datos_combo_modificado)
+
+    // Obtener información adicional de cada producto
+    const productosCompletos = []
+    const client = await import("./db").then((module) => module.getClient())
+
+    try {
+      for (const item of items) {
+        const productoResult = await client.query(
+          `SELECT id, nombre, codigo, descripcion FROM Productos WHERE id = $1`,
+          [item.id_producto],
+        )
+
+        if (productoResult.rows.length > 0) {
+          productosCompletos.push({
+            ...item,
+            ...productoResult.rows[0],
+          })
+        } else {
+          productosCompletos.push(item) // Mantener al menos los datos básicos
+        }
+      }
+
+      return productosCompletos
+    } finally {
+      client.release()
+    }
+  } catch (error) {
+    console.error("Error al obtener detalles de combo modificado:", error)
+    return []
   }
 }
 
