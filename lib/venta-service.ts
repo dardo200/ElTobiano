@@ -609,7 +609,7 @@ export async function eliminarVenta(id: number): Promise<boolean> {
 
 export async function actualizarDetallesVenta(
   id: number,
-  detalles: Array<DetalleVenta & { es_combo?: boolean }>,
+  detalles: Array<DetalleVenta & { es_combo?: boolean; datos_combo_modificado?: string }>,
 ): Promise<Venta | null> {
   try {
     const client = await import("./db").then((module) => module.getClient())
@@ -662,29 +662,46 @@ export async function actualizarDetallesVenta(
       for (const detalle of detalles) {
         // Verificar si es un combo antes de insertar
         if (detalle.es_combo) {
-          // Verificar que el combo exista
-          const comboCheck = await client.query("SELECT id FROM Combos WHERE id = $1", [detalle.id_producto])
-          if (comboCheck.rows.length === 0) {
-            throw new Error(`El combo con ID ${detalle.id_producto} no existe`)
-          }
-
           // Insertar el detalle de venta con el combo
-          await client.query(
-            "INSERT INTO DetalleVentas (id_venta, id_producto, cantidad, precio, es_combo) VALUES ($1, $2, $3, $4, $5)",
-            [id, detalle.id_producto, detalle.cantidad, detalle.precio, true],
-          )
+          if (detalle.datos_combo_modificado) {
+            // Si es un combo modificado, preservar los datos de modificación
+            await client.query(
+              "INSERT INTO DetalleVentas (id_venta, id_producto, cantidad, precio, es_combo, datos_combo_modificado) VALUES ($1, $2, $3, $4, $5, $6)",
+              [id, detalle.id_producto, detalle.cantidad, detalle.precio, true, detalle.datos_combo_modificado],
+            )
 
-          // Si es un combo, obtener sus productos y actualizar el stock de cada uno
-          const comboDetallesResult = await client.query(
-            "SELECT id_producto, cantidad FROM DetalleCombos WHERE id_combo = $1",
-            [detalle.id_producto],
-          )
+            // Para combos modificados, actualizar el stock basado en los datos modificados
+            try {
+              const items = JSON.parse(detalle.datos_combo_modificado)
+              for (const item of items) {
+                await client.query("UPDATE Productos SET stock = stock - $1 WHERE id = $2", [
+                  item.cantidad,
+                  item.id_producto,
+                ])
+              }
+            } catch (error) {
+              console.error("Error al procesar datos de combo modificado:", error)
+              throw error
+            }
+          } else {
+            // Si es un combo normal, insertar sin datos de modificación
+            await client.query(
+              "INSERT INTO DetalleVentas (id_venta, id_producto, cantidad, precio, es_combo) VALUES ($1, $2, $3, $4, $5)",
+              [id, detalle.id_producto, detalle.cantidad, detalle.precio, true],
+            )
 
-          for (const comboDetalle of comboDetallesResult.rows) {
-            await client.query("UPDATE Productos SET stock = stock - $1 WHERE id = $2", [
-              comboDetalle.cantidad * detalle.cantidad,
-              comboDetalle.id_producto,
-            ])
+            // Si es un combo normal, obtener sus productos y actualizar el stock de cada uno
+            const comboDetallesResult = await client.query(
+              "SELECT id_producto, cantidad FROM DetalleCombos WHERE id_combo = $1",
+              [detalle.id_producto],
+            )
+
+            for (const comboDetalle of comboDetallesResult.rows) {
+              await client.query("UPDATE Productos SET stock = stock - $1 WHERE id = $2", [
+                comboDetalle.cantidad * detalle.cantidad,
+                comboDetalle.id_producto,
+              ])
+            }
           }
         } else {
           // Verificar que el producto exista

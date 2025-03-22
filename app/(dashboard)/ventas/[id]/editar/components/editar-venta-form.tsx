@@ -276,16 +276,56 @@ export const EditarVentaForm: React.FC<EditarVentaFormProps> = ({ venta, cliente
 
       // Asegurarse de que los datos_combo_modificado se preserven
       const detallesParaEnviar = detalles.map((detalle) => {
-        // Si el detalle original tenía datos_combo_modificado, asegurarse de incluirlo
-        const detalleOriginal = venta.detalles?.find((d) => d.id === detalle.id)
+        // Caso 1: Si el detalle es un combo marcado como modificado
+        if (detalle.es_combo && detalle.combo_modificado) {
+          // Buscar el detalle original si existe
+          const detalleOriginal = venta.detalles?.find(
+            (d) => d.id === detalle.id && d.id_producto === detalle.id_producto && d.es_combo,
+          )
+
+          // Si encontramos el detalle original y tiene datos_combo_modificado, usarlos
+          if (detalleOriginal && detalleOriginal.datos_combo_modificado) {
+            console.log("Preservando datos de combo modificado para detalle:", detalle.id)
+            return {
+              ...detalle,
+              datos_combo_modificado: detalleOriginal.datos_combo_modificado,
+            }
+          }
+
+          // Si no encontramos datos pero el combo está marcado como modificado,
+          // intentar reconstruir los datos desde comboDetalles
+          if (comboDetalles[detalle.id_producto]) {
+            console.log("Reconstruyendo datos de combo modificado desde comboDetalles")
+            const items = comboDetalles[detalle.id_producto].map((item) => ({
+              id_producto: item.id_producto,
+              cantidad: item.cantidad,
+            }))
+
+            return {
+              ...detalle,
+              datos_combo_modificado: JSON.stringify(items),
+            }
+          }
+        }
+
+        // Caso 2: Si el detalle original tenía datos_combo_modificado, asegurarse de incluirlo
+        const detalleOriginal = venta.detalles?.find(
+          (d) => d.id === detalle.id && d.id_producto === detalle.id_producto,
+        )
+
         if (detalleOriginal && detalleOriginal.datos_combo_modificado) {
+          console.log("Preservando datos de combo modificado del detalle original:", detalleOriginal.id)
           return {
             ...detalle,
             datos_combo_modificado: detalleOriginal.datos_combo_modificado,
+            combo_modificado: true,
           }
         }
+
         return detalle
       })
+
+      console.log("Detalles preparados para enviar:", detallesParaEnviar)
 
       // Luego, actualizar los detalles de la venta
       const detallesUrl = `/api/ventas/detalles?id=${venta.id}`
