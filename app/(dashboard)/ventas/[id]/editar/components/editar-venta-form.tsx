@@ -1,9 +1,5 @@
 "use client"
 
-import { Label } from "@/components/ui/label"
-
-import { Switch } from "@/components/ui/switch"
-
 import type React from "react"
 
 import { useState, useEffect, useRef } from "react"
@@ -30,6 +26,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import type { Venta, Cliente, Producto, Combo, DetalleVenta } from "@/types"
 import { toast } from "@/components/ui/use-toast"
 
