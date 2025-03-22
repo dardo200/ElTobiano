@@ -308,7 +308,23 @@ export default function DespacharVentaPage() {
         toast.success("Venta despachada correctamente")
         router.push("/ventas")
       } else {
-        toast.error("Error al despachar la venta")
+        const data = await response.json()
+        if (data.error && data.error.includes("Stock insuficiente")) {
+          // Mostrar un mensaje de error más detallado
+          toast({
+            variant: "destructive",
+            title: "Error de stock",
+            description: (
+              <div className="mt-2 max-h-[200px] overflow-y-auto">
+                <p className="font-semibold mb-2">Productos con stock insuficiente:</p>
+                <pre className="text-xs whitespace-pre-wrap">{data.error}</pre>
+              </div>
+            ),
+            duration: 10000, // Mostrar por más tiempo
+          })
+        } else {
+          toast.error("Error al despachar la venta")
+        }
       }
     } catch (error) {
       console.error("Error al despachar la venta:", error)

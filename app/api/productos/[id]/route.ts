@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server"
 import { obtenerProductoPorId, actualizarProducto, eliminarProducto } from "@/lib/producto-service"
 
-export async function GET(req: Request, { params }: { params: { id: Promise<string> | string } }) {
+export async function GET(req: Request, { params }: { params: { id: string } | Promise<{ id: string }> }) {
   try {
-    const idParam = await params.id
-    const id = Number.parseInt(idParam)
+    const resolvedParams = await Promise.resolve(params)
+    const id = Number.parseInt(resolvedParams.id)
     const producto = await obtenerProductoPorId(id)
 
     if (!producto) {
@@ -18,10 +18,10 @@ export async function GET(req: Request, { params }: { params: { id: Promise<stri
   }
 }
 
-export async function PATCH(req: Request, { params }: { params: { id: Promise<string> | string } }) {
+export async function PATCH(req: Request, { params }: { params: { id: string } | Promise<{ id: string }> }) {
   try {
-    const idParam = await params.id
-    const id = Number.parseInt(idParam)
+    const resolvedParams = await Promise.resolve(params)
+    const id = Number.parseInt(resolvedParams.id)
     const body = await req.json()
     const producto = await actualizarProducto(id, body)
 
@@ -36,10 +36,10 @@ export async function PATCH(req: Request, { params }: { params: { id: Promise<st
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: Promise<string> | string } }) {
+export async function DELETE(req: Request, { params }: { params: { id: string } | Promise<{ id: string }> }) {
   try {
-    const idParam = await params.id
-    const id = Number.parseInt(idParam)
+    const resolvedParams = await Promise.resolve(params)
+    const id = Number.parseInt(resolvedParams.id)
     const success = await eliminarProducto(id)
 
     if (!success) {

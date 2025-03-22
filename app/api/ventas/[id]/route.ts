@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server"
 import { obtenerVentaPorId, actualizarVenta, eliminarVenta } from "@/lib/venta-service"
 
-export async function GET(req: Request, { params }: { params: { id: Promise<string> | string } }) {
+export async function GET(req: Request, { params }: { params: { id: string } | Promise<{ id: string }> }) {
   try {
-    const idParam = await params.id
-    const id = Number.parseInt(idParam)
+    // Await the entire params object first
+    const resolvedParams = await Promise.resolve(params)
+    const id = Number.parseInt(resolvedParams.id)
     const venta = await obtenerVentaPorId(id)
 
     if (!venta) {
@@ -18,10 +19,11 @@ export async function GET(req: Request, { params }: { params: { id: Promise<stri
   }
 }
 
-export async function PATCH(req: Request, { params }: { params: { id: Promise<string> | string } }) {
+export async function PATCH(req: Request, { params }: { params: { id: string } | Promise<{ id: string }> }) {
   try {
-    const idParam = await params.id
-    const id = Number.parseInt(idParam)
+    // Await the entire params object first
+    const resolvedParams = await Promise.resolve(params)
+    const id = Number.parseInt(resolvedParams.id)
     const body = await req.json()
 
     const venta = await actualizarVenta(id, body)
@@ -37,10 +39,11 @@ export async function PATCH(req: Request, { params }: { params: { id: Promise<st
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: Promise<string> | string } }) {
+export async function DELETE(req: Request, { params }: { params: { id: string } | Promise<{ id: string }> }) {
   try {
-    const idParam = await params.id
-    const id = Number.parseInt(idParam)
+    // Await the entire params object first
+    const resolvedParams = await Promise.resolve(params)
+    const id = Number.parseInt(resolvedParams.id)
     const success = await eliminarVenta(id)
 
     if (!success) {

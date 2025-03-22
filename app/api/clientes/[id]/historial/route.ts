@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server"
 import { obtenerHistorialComprasCliente } from "@/lib/cliente-service"
 
-export async function GET(req: Request, { params }: { params: { id: Promise<string> | string } }) {
+export async function GET(req: Request, { params }: { params: { id: string } | Promise<{ id: string }> }) {
   try {
-    const idParam = await params.id
-    const id = Number.parseInt(idParam)
+    const resolvedParams = await Promise.resolve(params)
+    const id = Number.parseInt(resolvedParams.id)
 
     if (isNaN(id)) {
       return NextResponse.json({ error: "ID de cliente inválido" }, { status: 400 })

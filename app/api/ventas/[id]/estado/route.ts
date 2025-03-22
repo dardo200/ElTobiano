@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server"
 import { actualizarEstadoVenta } from "@/lib/venta-service"
 
-export async function PATCH(req: Request, { params }: { params: { id: Promise<string> | string } }) {
+export async function PATCH(req: Request, { params }: { params: { id: string } | Promise<{ id: string }> }) {
   try {
-    const idParam = await params.id
-    const id = Number.parseInt(idParam)
+    const resolvedParams = await Promise.resolve(params)
+    const id = Number.parseInt(resolvedParams.id)
     const body = await req.json()
     const { estado } = body
 
@@ -25,8 +25,7 @@ export async function PATCH(req: Request, { params }: { params: { id: Promise<st
       if (error instanceof Error && error.message.includes("Stock insuficiente")) {
         return NextResponse.json(
           {
-            error:
-              "No hay stock disponible. Por favor, actualice el stock o realice una compra antes de cambiar el estado.",
+            error: error.message,
           },
           { status: 400 },
         )

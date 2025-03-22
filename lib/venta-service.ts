@@ -25,7 +25,6 @@ export async function obtenerVentas(): Promise<Venta[]> {
 export async function obtenerVentaPorId(id: number): Promise<Venta | null> {
   try {
     const client = await import("./db").then((module) => module.getClient())
-    
 
     try {
       // Obtener la venta
@@ -100,7 +99,7 @@ export async function obtenerVentaPorId(id: number): Promise<Venta | null> {
         detalles,
       }
     } finally {
-      await client.end()
+      client.release()
     }
   } catch (error) {
     console.error(`Error al obtener venta con id ${id}:`, error)
@@ -115,7 +114,6 @@ export async function crearVenta(
 ): Promise<Venta> {
   try {
     const client = await import("./db").then((module) => module.getClient())
-    
 
     try {
       await client.query("BEGIN")
@@ -269,7 +267,7 @@ export async function crearVenta(
       await client.query("ROLLBACK")
       throw error
     } finally {
-      await client.end()
+      client.release()
     }
   } catch (error) {
     console.error("Error al crear venta:", error)
@@ -282,7 +280,6 @@ export async function crearVenta(
 export async function actualizarEstadoVenta(id: number, estado: string): Promise<Venta | null> {
   try {
     const client = await import("./db").then((module) => module.getClient())
-    
 
     try {
       await client.query("BEGIN")
@@ -292,43 +289,80 @@ export async function actualizarEstadoVenta(id: number, estado: string): Promise
         // Obtener los detalles de la venta
         const detallesResult = await client.query("SELECT * FROM DetalleVentas WHERE id_venta = $1", [id])
 
+        // Array para almacenar productos con stock insuficiente
+        const productosConStockInsuficiente = []
+
         // Verificar el stock para cada detalle
         for (const detalle of detallesResult.rows) {
           if (!detalle.es_combo) {
             // Verificar stock para productos normales
-            const stockResult = await client.query("SELECT stock FROM Productos WHERE id = $1", [detalle.id_producto])
+            const stockResult = await client.query("SELECT id, nombre, codigo, stock FROM Productos WHERE id = $1", [
+              detalle.id_producto,
+            ])
 
             if (stockResult.rows.length === 0) {
               throw new Error(`El producto con ID ${detalle.id_producto} no existe`)
             }
 
-            const stockActual = stockResult.rows[0].stock
+            const producto = stockResult.rows[0]
+            const stockActual = producto.stock
+
             if (stockActual < detalle.cantidad) {
-              throw new Error(
-                `Stock insuficiente para el producto con ID ${detalle.id_producto}. Disponible: ${stockActual}, Solicitado: ${detalle.cantidad}`,
-              )
+              productosConStockInsuficiente.push({
+                id: producto.id,
+                nombre: producto.nombre,
+                codigo: producto.codigo,
+                stockActual,
+                cantidadNecesaria: detalle.cantidad,
+              })
             }
           } else {
             // Verificar stock para cada producto del combo
             const comboDetallesResult = await client.query(
-              `SELECT dc.id_producto, dc.cantidad, p.nombre, p.stock
-               FROM DetalleCombos dc
-               JOIN Productos p ON dc.id_producto = p.id
-               WHERE dc.id_combo = $1`,
+              `SELECT dc.id_producto, dc.cantidad, p.nombre, p.codigo, p.stock
+             FROM DetalleCombos dc
+             JOIN Productos p ON dc.id_producto = p.id
+             WHERE dc.id_combo = $1`,
               [detalle.id_producto],
             )
+
+            // Obtener el nombre del combo
+            const comboResult = await client.query("SELECT nombre FROM Combos WHERE id = $1", [detalle.id_producto])
+            const comboNombre =
+              comboResult.rows.length > 0 ? comboResult.rows[0].nombre : `Combo #${detalle.id_producto}`
 
             for (const comboDetalle of comboDetallesResult.rows) {
               const stockActual = comboDetalle.stock
               const cantidadNecesaria = comboDetalle.cantidad * detalle.cantidad
 
               if (stockActual < cantidadNecesaria) {
-                throw new Error(
-                  `Stock insuficiente para el producto "${comboDetalle.nombre}" (ID: ${comboDetalle.id_producto}) del combo. Disponible: ${stockActual}, Necesario: ${cantidadNecesaria}`,
-                )
+                productosConStockInsuficiente.push({
+                  id: comboDetalle.id_producto,
+                  nombre: comboDetalle.nombre,
+                  codigo: comboDetalle.codigo,
+                  stockActual,
+                  cantidadNecesaria,
+                  combo: comboNombre,
+                })
               }
             }
           }
+        }
+
+        // Si hay productos con stock insuficiente, lanzar un error con la lista completa
+        if (productosConStockInsuficiente.length > 0) {
+          let mensajeError = "Stock insuficiente para los siguientes productos:\n\n"
+
+          productosConStockInsuficiente.forEach((producto) => {
+            if (producto.combo) {
+              mensajeError += `- ${producto.nombre} (Código: ${producto.codigo || "N/A"}, ID: ${producto.id}) del combo "${producto.combo}"\n`
+            } else {
+              mensajeError += `- ${producto.nombre} (Código: ${producto.codigo || "N/A"}, ID: ${producto.id})\n`
+            }
+            mensajeError += `  Disponible: ${producto.stockActual}, Necesario: ${producto.cantidadNecesaria}\n\n`
+          })
+
+          throw new Error(mensajeError)
         }
       }
 
@@ -348,7 +382,7 @@ export async function actualizarEstadoVenta(id: number, estado: string): Promise
       await client.query("ROLLBACK")
       throw error
     } finally {
-      await client.end()
+      client.release()
     }
   } catch (error) {
     console.error(`Error al actualizar estado de venta con id ${id}:`, error)
@@ -423,7 +457,6 @@ export async function contarVentasPendientes(): Promise<number> {
 export async function actualizarVenta(id: number, venta: Partial<Venta>): Promise<Venta | null> {
   try {
     const client = await import("./db").then((module) => module.getClient())
-    
 
     try {
       await client.query("BEGIN")
@@ -469,7 +502,7 @@ export async function actualizarVenta(id: number, venta: Partial<Venta>): Promis
       await client.query("ROLLBACK")
       throw error
     } finally {
-      await client.end()
+      client.release()
     }
   } catch (error) {
     console.error(`Error al actualizar venta con id ${id}:`, error)
@@ -480,7 +513,6 @@ export async function actualizarVenta(id: number, venta: Partial<Venta>): Promis
 export async function eliminarVenta(id: number): Promise<boolean> {
   try {
     const client = await import("./db").then((module) => module.getClient())
-    
 
     try {
       await client.query("BEGIN")
@@ -525,7 +557,7 @@ export async function eliminarVenta(id: number): Promise<boolean> {
       await client.query("ROLLBACK")
       throw error
     } finally {
-      await client.end()
+      client.release()
     }
   } catch (error) {
     console.error(`Error al eliminar venta con id ${id}:`, error)
@@ -541,7 +573,6 @@ export async function actualizarDetallesVenta(
 ): Promise<Venta | null> {
   try {
     const client = await import("./db").then((module) => module.getClient())
-    
 
     try {
       await client.query("BEGIN")
@@ -650,7 +681,7 @@ export async function actualizarDetallesVenta(
       await client.query("ROLLBACK")
       throw error
     } finally {
-      await client.end()
+      client.release()
     }
   } catch (error) {
     console.error(`Error al actualizar detalles de venta con id ${id}:`, error)

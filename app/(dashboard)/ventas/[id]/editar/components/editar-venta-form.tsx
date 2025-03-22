@@ -121,6 +121,8 @@ export const EditarVentaForm: React.FC<EditarVentaFormProps> = ({ venta, cliente
   const onSubmit = async (data: VentaFormValues) => {
     setIsLoading(true)
     try {
+      console.log("Submitting form with venta ID:", venta.id)
+
       // Primero, actualizar los datos básicos de la venta
       const updateResponse = await fetch(`/api/ventas/${venta.id}`, {
         method: "PATCH",
@@ -135,12 +137,23 @@ export const EditarVentaForm: React.FC<EditarVentaFormProps> = ({ venta, cliente
       })
 
       if (!updateResponse.ok) {
-        const errorData = await updateResponse.json()
-        throw new Error(errorData.error || "Error al actualizar la venta")
+        let errorMessage = "Error al actualizar la venta"
+        try {
+          const errorData = await updateResponse.json()
+          errorMessage = errorData.error || errorMessage
+        } catch (e) {
+          console.error("Error parsing error response:", e)
+        }
+        throw new Error(errorMessage)
       }
 
+      console.log("Basic venta data updated, now updating details. Detalles count:", detalles.length)
+
       // Luego, actualizar los detalles de la venta
-      const detallesResponse = await fetch(`/api/ventas/${venta.id}/detalles`, {
+      const detallesUrl = `/api/ventas/detalles?id=${venta.id}`
+      console.log("Calling API endpoint:", detallesUrl)
+
+      const detallesResponse = await fetch(detallesUrl, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -148,9 +161,19 @@ export const EditarVentaForm: React.FC<EditarVentaFormProps> = ({ venta, cliente
         body: JSON.stringify(detalles),
       })
 
+      console.log("API response status:", detallesResponse.status)
+
       if (!detallesResponse.ok) {
-        const errorData = await detallesResponse.json()
-        throw new Error(errorData.error || "Error al actualizar los detalles de la venta")
+        let errorMessage = "Error al actualizar los detalles de la venta"
+        try {
+          const errorData = await detallesResponse.json()
+          errorMessage = errorData.error || errorMessage
+        } catch (e) {
+          console.error("Error parsing error response:", e)
+          // If we can't parse the JSON, use the status text
+          errorMessage = `Error ${detallesResponse.status}: ${detallesResponse.statusText}`
+        }
+        throw new Error(errorMessage)
       }
 
       toast.success("Venta actualizada correctamente")
