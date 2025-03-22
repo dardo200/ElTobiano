@@ -5,6 +5,7 @@ import {
   type ColumnDef,
   type ColumnFiltersState,
   type SortingState,
+  type FilterFn,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
@@ -23,6 +24,7 @@ interface DataTableProps<TData, TValue> {
   searchKey?: string
   searchPlaceholder?: string
   deleteRow?: (id: number) => Promise<boolean>
+  filterFunction?: (row: TData, filterValue: string) => boolean
 }
 
 export function DataTable<TData, TValue>({
@@ -31,9 +33,23 @@ export function DataTable<TData, TValue>({
   searchKey,
   searchPlaceholder = "Buscar...",
   deleteRow,
+  filterFunction,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const [globalFilter, setGlobalFilter] = useState<string>("")
+
+  // Función de filtrado personalizada que usa filterFunction si está disponible
+  const customFilterFn: FilterFn<TData> = (row, columnId, filterValue) => {
+    // Si hay una función de filtrado personalizada, úsala
+    if (filterFunction) {
+      return filterFunction(row.original, filterValue)
+    }
+
+    // De lo contrario, usa el filtrado estándar por columna
+    const value = row.getValue(columnId) as string
+    return value?.toLowerCase().includes(filterValue.toLowerCase())
+  }
 
   const table = useReactTable({
     data,
@@ -42,11 +58,13 @@ export function DataTable<TData, TValue>({
     getPaginationRowModel: getPaginationRowModel(),
     onSortingChange: setSorting,
     getSortedRowModel: getSortedRowModel(),
-    onColumnFiltersChange: setColumnFilters,
+    onGlobalFilterChange: setGlobalFilter,
+    globalFilterFn: customFilterFn,
     getFilteredRowModel: getFilteredRowModel(),
     state: {
       sorting,
       columnFilters,
+      globalFilter: filterFunction ? globalFilter : undefined,
     },
     meta: {
       deleteRow,
@@ -55,16 +73,21 @@ export function DataTable<TData, TValue>({
 
   return (
     <div>
-      {searchKey && (
-        <div className="flex items-center py-4">
-          <Input
-            placeholder={searchPlaceholder}
-            value={(table.getColumn(searchKey)?.getFilterValue() as string) ?? ""}
-            onChange={(event) => table.getColumn(searchKey)?.setFilterValue(event.target.value)}
-            className="max-w-sm"
-          />
-        </div>
-      )}
+      <div className="flex items-center py-4">
+        <Input
+          placeholder={searchPlaceholder}
+          value={filterFunction ? globalFilter : ((table.getColumn(searchKey || "")?.getFilterValue() as string) ?? "")}
+          onChange={(event) => {
+            const value = event.target.value
+            if (filterFunction) {
+              setGlobalFilter(value)
+            } else if (searchKey) {
+              table.getColumn(searchKey)?.setFilterValue(value)
+            }
+          }}
+          className="max-w-sm"
+        />
+      </div>
       <div className="rounded-md border">
         <Table>
           <TableHeader>

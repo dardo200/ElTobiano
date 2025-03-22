@@ -54,6 +54,17 @@ export default function ClientesPage() {
     }
   }
 
+  // Función personalizada de filtrado para buscar por nombre o DNI
+  const filterFunction = (row: Cliente, filterValue: string) => {
+    const searchTerm = filterValue.toLowerCase()
+    const matchesNombre = row.nombre?.toLowerCase().includes(searchTerm) || false
+    const matchesDNI = row.dni?.toLowerCase().includes(searchTerm) || false
+    const matchesEmail = row.email?.toLowerCase().includes(searchTerm) || false
+    const matchesTelefono = row.telefono?.toLowerCase().includes(searchTerm) || false
+
+    return matchesNombre || matchesDNI || matchesEmail || matchesTelefono
+  }
+
   return (
     <>
       <div className="flex items-center justify-between">
@@ -73,8 +84,9 @@ export default function ClientesPage() {
           columns={columns}
           data={clientes}
           searchKey="nombre"
-          searchPlaceholder="Buscar clientes..."
+          searchPlaceholder="Buscar por nombre, DNI, email o teléfono..."
           deleteRow={handleDeleteCliente}
+          filterFunction={filterFunction}
         />
       )}
     </>
