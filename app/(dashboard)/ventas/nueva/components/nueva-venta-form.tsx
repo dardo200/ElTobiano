@@ -16,13 +16,13 @@ import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import type { Cliente, Producto, Combo } from "@/types"
-import { toast } from "@/components/ui/use-toast"
+// Importación correcta de toast
+import { toast } from "@/components/ui/toast/use-toast"
 import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
-  AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
@@ -33,6 +33,9 @@ import { ProductoComboSelector } from "@/components/ventas/producto-combo-select
 import { ComboEditor } from "@/components/ventas/combo-editor"
 import { useComboEditor } from "@/hooks/use-combo-editor"
 import { useProductSearch } from "@/hooks/use-product-search"
+
+// Importar las funciones de generación de PDF
+import { generarPresupuestoPDF, descargarPDF } from "@/lib/pdf-service"
 
 const formSchema = z.object({
   id_cliente: z.string().optional(),
@@ -63,6 +66,9 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
   const [combos, setCombos] = useState<Combo[]>([])
   const [activeTabsState, setActiveTabsState] = useState<Record<number, "producto" | "combo">>({})
   const [isMayorista, setIsMayorista] = useState(false)
+
+  // Añadir un nuevo estado para controlar la generación del PDF
+  const [generandoPDF, setGenerandoPDF] = useState(false)
 
   // Convertir clientes a opciones para el Combobox
   const client = useState(false)
@@ -261,7 +267,11 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
       await crearVenta(ventaData)
     } catch (error) {
       console.error("Error al crear la venta:", error)
-      toast.error(`Error: ${error.message || "Error desconocido al crear la venta"}`)
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Error desconocido al crear la venta",
+      })
       setIsLoading(false)
     }
   }
@@ -278,7 +288,43 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
       })
 
       if (response.ok) {
-        toast.success("Venta creada correctamente.")
+        const ventaCreada = await response.json()
+        toast({
+          title: "Venta creada",
+          description: "La venta se ha creado correctamente",
+        })
+
+        // Preguntar al usuario si desea generar un presupuesto
+        const generarPDF = window.confirm("¿Desea generar un presupuesto para enviar al cliente?")
+
+        if (generarPDF && ventaCreada) {
+          try {
+            setGenerandoPDF(true)
+
+            // Obtener los datos completos de la venta recién creada
+            const ventaResponse = await fetch(`/api/ventas/${ventaCreada.id}`)
+            if (!ventaResponse.ok) {
+              throw new Error("No se pudo obtener la información completa de la venta")
+            }
+
+            const ventaCompleta = await ventaResponse.json()
+
+            // Generar el PDF con los datos completos
+            const pdfBlob = await generarPresupuestoPDF(ventaCompleta)
+            descargarPDF(pdfBlob, `Presupuesto_${ventaCompleta.id}_${ventaCompleta.cliente?.nombre || "Cliente"}.pdf`)
+          } catch (error) {
+            console.error("Error al generar el presupuesto:", error)
+            toast({
+              variant: "destructive",
+              title: "Error",
+              description: "No se pudo generar el presupuesto",
+            })
+          } finally {
+            setGenerandoPDF(false)
+          }
+        }
+
+        // Continuar con el código existente
         router.push("/ventas")
         router.refresh()
       } else {
@@ -287,14 +333,26 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
 
         // Mostrar mensaje de error más detallado
         if (errorData.details) {
-          toast.error(`Error: ${errorData.details}`)
+          toast({
+            variant: "destructive",
+            title: "Error",
+            description: errorData.details,
+          })
         } else {
-          toast.error(errorData.error || "Error al crear la venta")
+          toast({
+            variant: "destructive",
+            title: "Error",
+            description: errorData.error || "Error al crear la venta",
+          })
         }
       }
     } catch (error) {
       console.error("Error al crear la venta:", error)
-      toast.error(`Error: ${error.message || "Error desconocido al crear la venta"}`)
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "Error desconocido al crear la venta",
+      })
     } finally {
       setIsLoading(false)
     }
@@ -490,14 +548,15 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
           </div>
         </form>
       </Form>
-      {/* Diálogo de alerta para stock insuficiente */}
+      {/* Diálogo de alerta para stock insuficiente - Corregido para evitar errores de hidratación */}
       <AlertDialog open={showStockAlert} onOpenChange={setShowStockAlert}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Stock insuficiente</AlertDialogTitle>
-            <AlertDialogDescription>
+            {/* Usar un div en lugar de AlertDialogDescription para evitar el error de hidratación */}
+            <div className="text-sm text-muted-foreground">
               <div className="text-left">
-                <p className="mb-2">Los siguientes productos no tienen stock suficiente:</p>
+                <div className="mb-2">Los siguientes productos no tienen stock suficiente:</div>
                 <ul className="list-disc pl-5 space-y-1">
                   {productosSinStock.map((producto, index) => (
                     <li key={index} className="text-sm">
@@ -521,9 +580,9 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
                     </li>
                   ))}
                 </ul>
-                <p className="mt-4">¿Desea crear la venta de todas formas?</p>
+                <div className="mt-4">¿Desea crear la venta de todas formas?</div>
               </div>
-            </AlertDialogDescription>
+            </div>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>

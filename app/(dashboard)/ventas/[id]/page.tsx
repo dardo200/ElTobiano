@@ -4,13 +4,17 @@ import React from "react"
 
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { ArrowLeft, Printer, Truck, ChevronDown, ChevronUp } from "lucide-react"
+import { ArrowLeft, Printer, Truck, ChevronDown, ChevronUp, FileText } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import type { Venta, DetalleVenta } from "@/types"
+
+// Importar las funciones de generación de PDF y toast correctamente
+import { generarPresupuestoPDF, descargarPDF } from "@/lib/pdf-service"
+import { toast } from "@/components/ui/toast/use-toast"
 
 interface ProductoCombo {
   id: number
@@ -26,6 +30,32 @@ export default function DetalleVentaPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [expandedCombos, setExpandedCombos] = useState<Record<number, boolean>>({})
   const [combosDetalles, setCombosDetalles] = useState<Record<number, ProductoCombo[]>>({})
+  // Añadir un nuevo estado para controlar la generación del PDF
+  const [generandoPDF, setGenerandoPDF] = useState(false)
+
+  // Añadir la función para generar y descargar el PDF
+  const handleGenerarPresupuesto = async () => {
+    if (!venta) return
+
+    try {
+      setGenerandoPDF(true)
+      const pdfBlob = await generarPresupuestoPDF(venta)
+      descargarPDF(pdfBlob, `Presupuesto_${venta.id}_${venta.cliente?.nombre || "Cliente"}.pdf`)
+      toast({
+        title: "Presupuesto generado",
+        description: "El presupuesto se ha generado y descargado correctamente",
+      })
+    } catch (error) {
+      console.error("Error al generar el presupuesto:", error)
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo generar el presupuesto",
+      })
+    } finally {
+      setGenerandoPDF(false)
+    }
+  }
 
   useEffect(() => {
     const fetchVenta = async () => {
@@ -180,6 +210,10 @@ export default function DetalleVentaPage() {
           <Button variant="outline" onClick={handlePrint}>
             <Printer className="mr-2 h-4 w-4" />
             Imprimir
+          </Button>
+          <Button variant="default" onClick={handleGenerarPresupuesto} disabled={generandoPDF}>
+            <FileText className="mr-2 h-4 w-4" />
+            {generandoPDF ? "Generando..." : "Generar Presupuesto"}
           </Button>
         </div>
       </div>
