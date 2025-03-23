@@ -1,4 +1,4 @@
-import type { Venta, DetalleVenta } from "@/types"
+import type { Venta } from "@/types"
 
 // Esta función se ejecutará en el cliente, por lo que importamos jspdf dinámicamente
 export const generarPresupuestoPDF = async (venta: Venta): Promise<Blob> => {
@@ -40,8 +40,6 @@ export const generarPresupuestoPDF = async (venta: Venta): Promise<Blob> => {
   doc.text(`Nº: ${venta.id}`, 105, 35, { align: "center" })
   doc.text(`Fecha: ${new Date(venta.fecha).toLocaleDateString()}`, 105, 42, { align: "center" })
 
-
-
   // Información del cliente
   doc.setFontSize(12)
   doc.setFont("helvetica", "bold")
@@ -69,7 +67,7 @@ export const generarPresupuestoPDF = async (venta: Venta): Promise<Blob> => {
   // Verificar que venta.detalles exista y tenga elementos
   if (venta.detalles && venta.detalles.length > 0) {
     // Añadir filas a la tabla
-    venta.detalles.forEach((detalle: DetalleVenta) => {
+    for (const detalle of venta.detalles) {
       const precio = detalle.precio || 0
       const cantidad = detalle.cantidad || 0
       const subtotal = precio * cantidad
@@ -84,7 +82,63 @@ export const generarPresupuestoPDF = async (venta: Venta): Promise<Blob> => {
       }
 
       tableRows.push([productoNombre, cantidad.toString(), `$${precio.toFixed(2)}`, `$${subtotal.toFixed(2)}`])
-    })
+
+      // Si es un combo, agregar los productos que lo componen
+      if (detalle.es_combo) {
+        // Intentar obtener los detalles del combo
+        try {
+          let comboProductos: any[] = []
+
+          // Si es un combo modificado, obtener los productos desde datos_combo_modificado
+          if (detalle.datos_combo_modificado) {
+            const items = JSON.parse(detalle.datos_combo_modificado)
+
+            // Obtener información de cada producto
+            for (const item of items) {
+              try {
+                const response = await fetch(`/api/productos/${item.id_producto}`)
+                if (response.ok) {
+                  const producto = await response.json()
+                  comboProductos.push({
+                    nombre: producto.nombre || `Producto #${item.id_producto}`,
+                    cantidad: item.cantidad,
+                  })
+                }
+              } catch (error) {
+                console.error(`Error al obtener producto ${item.id_producto}:`, error)
+                comboProductos.push({
+                  nombre: `Producto #${item.id_producto}`,
+                  cantidad: item.cantidad,
+                })
+              }
+            }
+          } else {
+            // Si es un combo normal, obtener los productos desde la API
+            try {
+              const response = await fetch(`/api/combos/${detalle.id_producto}`)
+              if (response.ok) {
+                const combo = await response.json()
+                if (combo.detalles && combo.detalles.length > 0) {
+                  comboProductos = combo.detalles.map((d: any) => ({
+                    nombre: d.producto?.nombre || `Producto #${d.id_producto}`,
+                    cantidad: d.cantidad,
+                  }))
+                }
+              }
+            } catch (error) {
+              console.error(`Error al obtener combo ${detalle.id_producto}:`, error)
+            }
+          }
+
+          // Agregar los productos del combo a la tabla con indentación
+          for (const producto of comboProductos) {
+            tableRows.push([`   • ${producto.nombre}`, (producto.cantidad * cantidad).toString(), "", ""])
+          }
+        } catch (error) {
+          console.error("Error al procesar detalles del combo:", error)
+        }
+      }
+    }
   } else {
     // Si no hay detalles, agregar una fila indicándolo
     tableRows.push(["No hay productos en esta venta", "", "", ""])
@@ -108,6 +162,18 @@ export const generarPresupuestoPDF = async (venta: Venta): Promise<Blob> => {
       3: { cellWidth: 35, halign: "right" },
     },
     margin: { left: 15, right: 15 },
+    // Estilo para las filas de productos dentro de combos
+    rowStyles: (row) => {
+      const data = tableRows[row]
+      if (data[0].startsWith("   •")) {
+        return {
+          fontStyle: "italic",
+          textColor: [100, 100, 100],
+          fillColor: [245, 245, 245],
+        }
+      }
+      return {}
+    },
   })
 
   // Calcular la posición Y después de la tabla
@@ -126,7 +192,6 @@ export const generarPresupuestoPDF = async (venta: Venta): Promise<Blob> => {
   doc.text("- Los precios pueden variar sin previo aviso.", 15, finalY + 36)
   doc.text("- La entrega se realizará una vez confirmado el pago.", 15, finalY + 44)
 
-
   // Firma
   try {
     const firma = new Image()
@@ -143,13 +208,14 @@ export const generarPresupuestoPDF = async (venta: Venta): Promise<Blob> => {
     console.error("Error al cargar la firma:", error)
     // Continuar sin la firma
   }
+
   // Información de la empresa - Ajustada para evitar superposición
   doc.setFontSize(10)
-  doc.text("EL TOBIANO TALABARTERÍA", 190, finalY+60, { align: "right" })
-  doc.text("Río Cuarto, Córdoba, Argentina", 190, finalY+65, { align: "right" })
-  doc.text("Tel: +54 9 3586 00-0650", 190, finalY+70, { align: "right" })
-  doc.text("Email: eltobianoventas@gmail.com", 190, finalY+75, { align: "right" })
-  
+  doc.text("EL TOBIANO TALABARTERÍA", 190, finalY + 60, { align: "right" })
+  doc.text("Río Cuarto, Córdoba, Argentina", 190, finalY + 65, { align: "right" })
+  doc.text("Tel: +54 9 3586 00-0650", 190, finalY + 70, { align: "right" })
+  doc.text("Email: eltobianoventas@gmail.com", 190, finalY + 75, { align: "right" })
+
   // Pie de página
   const pageCount = doc.getNumberOfPages()
   for (let i = 1; i <= pageCount; i++) {
