@@ -88,6 +88,7 @@ export default function EmbalarVentaPage() {
     fetchVenta()
   }, [params.id, router, toast])
 
+  // Modificar la función handleSubmit para mostrar un mensaje de error más claro
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -133,6 +134,12 @@ export default function EmbalarVentaPage() {
 
       if (!estadoResponse.ok) {
         const errorData = await estadoResponse.json()
+
+        // Si es un error de stock, mostrar un mensaje más descriptivo
+        if (errorData.stockError) {
+          throw new Error(errorData.message || "No hay suficiente stock para completar esta venta")
+        }
+
         throw new Error(errorData.error || "Error al cambiar el estado de la venta")
       }
 
@@ -149,7 +156,7 @@ export default function EmbalarVentaPage() {
       console.error("Error:", error)
       toast({
         variant: "destructive",
-        title: "Error",
+        title: "Error de stock",
         description: error instanceof Error ? error.message : "Error al procesar la venta",
       })
     } finally {

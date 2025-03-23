@@ -16,6 +16,7 @@ function extractIdFromUrl(request: Request): number | null {
   }
 }
 
+// Modificar la función PATCH para manejar mejor los errores de stock
 export async function PATCH(request: Request) {
   try {
     const id = extractIdFromUrl(request)
@@ -30,13 +31,26 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Estado no proporcionado" }, { status: 400 })
     }
 
-    const venta = await actualizarEstadoVenta(id, body.estado)
+    try {
+      const venta = await actualizarEstadoVenta(id, body.estado)
+      return NextResponse.json(venta)
+    } catch (error) {
+      console.error(`Error al actualizar estado de venta con id ${id}:`, error)
 
-    if (!venta) {
-      return NextResponse.json({ error: "Venta no encontrada" }, { status: 404 })
+      // Si el error contiene información sobre stock insuficiente, devolver un mensaje específico
+      if (error instanceof Error && error.message.includes("Stock insuficiente")) {
+        return NextResponse.json(
+          {
+            error: "Error de stock",
+            message: error.message,
+            stockError: true,
+          },
+          { status: 400 },
+        )
+      }
+
+      return NextResponse.json({ error: "Error al actualizar el estado de la venta" }, { status: 500 })
     }
-
-    return NextResponse.json(venta)
   } catch (error) {
     console.error(`Error al actualizar estado de venta:`, error)
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
