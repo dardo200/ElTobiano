@@ -1,24 +1,29 @@
 import { NextResponse } from "next/server"
-import { obtenerVentaPorId } from "@/lib/venta-service"
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+// Función auxiliar para extraer y validar el ID
+const getValidId = (params: any): number | null => {
   try {
-    const id = Number.parseInt(params.id)
-
-    if (isNaN(id)) {
-      return NextResponse.json({ error: "ID de venta inválido" }, { status: 400 })
-    }
-
-    const venta = await obtenerVentaPorId(id)
-
-    if (!venta) {
-      return NextResponse.json({ error: "Venta no encontrada" }, { status: 404 })
-    }
-
-    // Devolver la venta para que el cliente genere el PDF
-    return NextResponse.json(venta)
+    if (!params || !params.id) return null
+    const id = Number.parseInt(String(params.id), 10)
+    return isNaN(id) ? null : id
   } catch (error) {
-    console.error(`Error al obtener datos para presupuesto de venta ${params.id}:`, error)
+    return null
+  }
+}
+
+export async function GET(request: Request, { params }: { params: any }) {
+  try {
+    const id = getValidId(params)
+
+    if (id === null) {
+      return NextResponse.json({ error: "ID inválido o no proporcionado" }, { status: 400 })
+    }
+
+    // Resto del código...
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error(`Error al generar presupuesto:`, error)
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
 }

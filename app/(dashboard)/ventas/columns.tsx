@@ -1,7 +1,7 @@
 "use client"
 
 import type { ColumnDef } from "@tanstack/react-table"
-import { ArrowUpDown, Eye, Edit, Truck, Package, Trash2 } from "lucide-react"
+import { ArrowUpDown, Eye, Edit, Truck, Package, Trash2, CheckCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import type { Venta } from "@/types"
@@ -101,6 +101,9 @@ export const columns: ColumnDef<Venta>[] = [
           break
         case "Despachado":
           variant = "success"
+          break
+        case "Completado":
+          variant = "outline"
           break
       }
 
@@ -210,7 +213,7 @@ export const columns: ColumnDef<Venta>[] = [
           </AlertDialog>
 
           {venta.estado === "Pendiente" && (
-            <Button variant="outline" size="sm" onClick={() => handleCambiarEstado(venta.id, "Para embalar")}>
+            <Button variant="outline" size="sm" onClick={() => router.push(`/ventas/${venta.id}/embalar`)}>
               <Package className="h-4 w-4" />
               <span className="ml-2">Para embalar</span>
             </Button>
@@ -220,6 +223,13 @@ export const columns: ColumnDef<Venta>[] = [
             <Button variant="outline" size="sm" onClick={() => router.push(`/ventas/${venta.id}/despachar`)}>
               <Truck className="h-4 w-4" />
               <span className="ml-2">Despachar</span>
+            </Button>
+          )}
+
+          {venta.estado === "Despachado" && (
+            <Button variant="outline" size="sm" onClick={() => router.push(`/ventas/${venta.id}/completar`)}>
+              <CheckCircle className="h-4 w-4" />
+              <span className="ml-2">Completar</span>
             </Button>
           )}
         </div>

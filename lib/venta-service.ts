@@ -22,6 +22,7 @@ export async function obtenerVentas(): Promise<Venta[]> {
   }
 }
 
+// Actualizar la función obtenerVentaPorId para incluir los nuevos campos
 export async function obtenerVentaPorId(id: number): Promise<Venta | null> {
   try {
     const client = await import("./db").then((module) => module.getClient())
@@ -30,7 +31,7 @@ export async function obtenerVentaPorId(id: number): Promise<Venta | null> {
       // Obtener la venta
       const ventaResult = await client.query(
         `
-        SELECT v.*, c.nombre as cliente_nombre, c.email, c.telefono, c.direccion
+        SELECT v.*, c.nombre as cliente_nombre, c.email, c.telefono, c.direccion, v.medio_comunicacion, v.dato_comunicacion, v.correo_usado, v.pago_envio, v.cuenta_transferencia, v.comprobante_pago, v.requiere_factura, v.numero_factura, v.numero_seguimiento
         FROM Ventas v
         LEFT JOIN Clientes c ON v.id_cliente = c.id
         WHERE v.id = $1
@@ -98,6 +99,15 @@ export async function obtenerVentaPorId(id: number): Promise<Venta | null> {
             }
           : undefined,
         detalles,
+        medio_comunicacion: venta.medio_comunicacion,
+        dato_comunicacion: venta.dato_comunicacion,
+        correo_usado: venta.correo_usado,
+        pago_envio: venta.pago_envio,
+        cuenta_transferencia: venta.cuenta_transferencia,
+        comprobante_pago: venta.comprobante_pago,
+        requiere_factura: venta.requiere_factura,
+        numero_factura: venta.numero_factura,
+        numero_seguimiento: venta.numero_seguimiento,
       }
     } finally {
       client.release()
@@ -220,8 +230,23 @@ export async function crearVenta(
 
       // En la parte donde se inserta la venta, establecer el estado como "Pendiente"
       const ventaResult = await client.query(
-        "INSERT INTO Ventas (id_cliente, fecha, total, cerrado, estado) VALUES ($1, $2, $3, $4, $5) RETURNING *",
-        [venta.id_cliente || null, venta.fecha || new Date(), venta.total, venta.cerrado || false, estadoInicial],
+        "INSERT INTO Ventas (id_cliente, fecha, total, cerrado, estado, medio_comunicacion, dato_comunicacion, correo_usado, pago_envio, cuenta_transferencia, comprobante_pago, requiere_factura, numero_factura, numero_seguimiento) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *",
+        [
+          venta.id_cliente || null,
+          venta.fecha || new Date(),
+          venta.total,
+          venta.cerrado || false,
+          estadoInicial,
+          venta.medio_comunicacion || null,
+          venta.dato_comunicacion || null,
+          venta.correo_usado || null,
+          venta.pago_envio || null,
+          venta.cuenta_transferencia || null,
+          venta.comprobante_pago || null,
+          venta.requiere_factura || false,
+          venta.numero_factura || null,
+          venta.numero_seguimiento || null,
+        ],
       )
 
       const nuevaVenta = ventaResult.rows[0]
@@ -577,6 +602,7 @@ export async function contarVentasPendientes(): Promise<number> {
 
 // Agregar estas funciones al archivo
 
+// Actualizar la función actualizarVenta para incluir los nuevos campos
 export async function actualizarVenta(id: number, venta: Partial<Venta>): Promise<Venta | null> {
   try {
     const client = await import("./db").then((module) => module.getClient())
@@ -598,6 +624,61 @@ export async function actualizarVenta(id: number, venta: Partial<Venta>): Promis
       if (venta.estado !== undefined) {
         updateFields.push(`estado = $${paramIndex}`)
         updateValues.push(venta.estado)
+        paramIndex++
+      }
+
+      // Nuevos campos
+      if (venta.medio_comunicacion !== undefined) {
+        updateFields.push(`medio_comunicacion = $${paramIndex}`)
+        updateValues.push(venta.medio_comunicacion)
+        paramIndex++
+      }
+
+      if (venta.dato_comunicacion !== undefined) {
+        updateFields.push(`dato_comunicacion = $${paramIndex}`)
+        updateValues.push(venta.dato_comunicacion)
+        paramIndex++
+      }
+
+      if (venta.correo_usado !== undefined) {
+        updateFields.push(`correo_usado = $${paramIndex}`)
+        updateValues.push(venta.correo_usado)
+        paramIndex++
+      }
+
+      if (venta.pago_envio !== undefined) {
+        updateFields.push(`pago_envio = $${paramIndex}`)
+        updateValues.push(venta.pago_envio)
+        paramIndex++
+      }
+
+      if (venta.cuenta_transferencia !== undefined) {
+        updateFields.push(`cuenta_transferencia = $${paramIndex}`)
+        updateValues.push(venta.cuenta_transferencia)
+        paramIndex++
+      }
+
+      if (venta.comprobante_pago !== undefined) {
+        updateFields.push(`comprobante_pago = $${paramIndex}`)
+        updateValues.push(venta.comprobante_pago)
+        paramIndex++
+      }
+
+      if (venta.requiere_factura !== undefined) {
+        updateFields.push(`requiere_factura = $${paramIndex}`)
+        updateValues.push(venta.requiere_factura)
+        paramIndex++
+      }
+
+      if (venta.numero_factura !== undefined) {
+        updateFields.push(`numero_factura = $${paramIndex}`)
+        updateValues.push(venta.numero_factura)
+        paramIndex++
+      }
+
+      if (venta.numero_seguimiento !== undefined) {
+        updateFields.push(`numero_seguimiento = $${paramIndex}`)
+        updateValues.push(venta.numero_seguimiento)
         paramIndex++
       }
 

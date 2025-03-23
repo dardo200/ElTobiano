@@ -4,7 +4,7 @@ import React from "react"
 
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { ArrowLeft, Printer, Truck, ChevronDown, ChevronUp, FileText } from "lucide-react"
+import { ArrowLeft, Printer, Truck, ChevronDown, ChevronUp, FileText, Package, CheckCircle } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
@@ -195,6 +195,7 @@ export default function DetalleVentaPage() {
     )
   }
 
+  // Actualizar la página de detalles para mostrar los nuevos campos
   return (
     <>
       <div className="flex items-center justify-between">
@@ -242,17 +243,35 @@ export default function DetalleVentaPage() {
                       ? "destructive"
                       : venta.estado === "Para embalar"
                         ? "secondary"
-                        : "outline"
+                        : venta.estado === "Despachado"
+                          ? "success"
+                          : "outline"
                   }
                 >
                   {venta.estado}
                 </Badge>
               </div>
+              {venta.estado === "Pendiente" && (
+                <div className="pt-2">
+                  <Button className="w-full" onClick={() => router.push(`/ventas/${venta.id}/embalar`)}>
+                    <Package className="mr-2 h-4 w-4" />
+                    Preparar para embalar
+                  </Button>
+                </div>
+              )}
               {venta.estado === "Para embalar" && (
                 <div className="pt-2">
                   <Button className="w-full" onClick={() => router.push(`/ventas/${venta.id}/despachar`)}>
                     <Truck className="mr-2 h-4 w-4" />
                     Despachar Venta
+                  </Button>
+                </div>
+              )}
+              {venta.estado === "Despachado" && (
+                <div className="pt-2">
+                  <Button className="w-full" onClick={() => router.push(`/ventas/${venta.id}/completar`)}>
+                    <CheckCircle className="mr-2 h-4 w-4" />
+                    Completar Venta
                   </Button>
                 </div>
               )}
@@ -318,6 +337,81 @@ export default function DetalleVentaPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Mostrar información adicional si está disponible */}
+      {(venta.medio_comunicacion ||
+        venta.dato_comunicacion ||
+        venta.correo_usado ||
+        venta.pago_envio ||
+        venta.cuenta_transferencia ||
+        venta.comprobante_pago ||
+        venta.requiere_factura ||
+        venta.numero_factura ||
+        venta.numero_seguimiento) && (
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle>Información adicional</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {venta.medio_comunicacion && (
+                <div className="space-y-1">
+                  <span className="font-medium">Medio de comunicación:</span>
+                  <p>{venta.medio_comunicacion}</p>
+                </div>
+              )}
+              {venta.dato_comunicacion && (
+                <div className="space-y-1">
+                  <span className="font-medium">Dato de contacto:</span>
+                  <p>{venta.dato_comunicacion}</p>
+                </div>
+              )}
+              {venta.correo_usado && (
+                <div className="space-y-1">
+                  <span className="font-medium">Correo electrónico:</span>
+                  <p>{venta.correo_usado}</p>
+                </div>
+              )}
+              {venta.pago_envio && (
+                <div className="space-y-1">
+                  <span className="font-medium">Método de pago:</span>
+                  <p>{venta.pago_envio}</p>
+                </div>
+              )}
+              {venta.cuenta_transferencia && (
+                <div className="space-y-1">
+                  <span className="font-medium">Cuenta de transferencia:</span>
+                  <p>{venta.cuenta_transferencia}</p>
+                </div>
+              )}
+              {venta.comprobante_pago && (
+                <div className="space-y-1">
+                  <span className="font-medium">Comprobante de pago:</span>
+                  <p>{venta.comprobante_pago}</p>
+                </div>
+              )}
+              {venta.requiere_factura && (
+                <div className="space-y-1">
+                  <span className="font-medium">Requiere factura:</span>
+                  <p>Sí</p>
+                </div>
+              )}
+              {venta.numero_factura && (
+                <div className="space-y-1">
+                  <span className="font-medium">Número de factura:</span>
+                  <p>{venta.numero_factura}</p>
+                </div>
+              )}
+              {venta.numero_seguimiento && (
+                <div className="space-y-1">
+                  <span className="font-medium">Número de seguimiento:</span>
+                  <p>{venta.numero_seguimiento}</p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="mt-4">
         <CardHeader>

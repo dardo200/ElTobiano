@@ -29,15 +29,26 @@ export interface Cliente {
   cp?: string // Nuevo campo Código Postal
 }
 
+// Actualizar la interfaz Venta para incluir los nuevos campos
 export interface Venta {
   id: number
   id_cliente: number
   fecha: string
   total: number
   cerrado: boolean
-  estado: "Pendiente" | "Para embalar" | "Despachado"
+  estado: "Pendiente" | "Para embalar" | "Despachado" | "Completado"
   cliente?: Cliente
   detalles?: DetalleVenta[]
+  // Nuevos campos
+  medio_comunicacion?: string
+  dato_comunicacion?: string
+  correo_usado?: string
+  pago_envio?: string
+  cuenta_transferencia?: string
+  comprobante_pago?: string
+  requiere_factura?: boolean
+  numero_factura?: string
+  numero_seguimiento?: string
 }
 
 export interface DetalleVenta {

@@ -1,37 +1,42 @@
 import { NextResponse } from "next/server"
 import { actualizarEstadoVenta } from "@/lib/venta-service"
 
-export async function PATCH(req: Request, { params }: { params: { id: string } | Promise<{ id: string }> }) {
+// Función auxiliar para extraer el ID de la URL
+function extractIdFromUrl(request: Request): number | null {
   try {
-    const resolvedParams = await Promise.resolve(params)
-    const id = Number.parseInt(resolvedParams.id)
-    const body = await req.json()
-    const { estado } = body
+    const url = new URL(request.url)
+    const pathParts = url.pathname.split("/")
+    // El ID está en la posición antepenúltima (ventas/[id]/estado)
+    const idStr = pathParts[pathParts.length - 2]
+    const id = Number.parseInt(idStr, 10)
+    return isNaN(id) ? null : id
+  } catch (error) {
+    console.error("Error al extraer ID de la URL:", error)
+    return null
+  }
+}
 
-    if (!estado) {
-      return NextResponse.json({ error: "El estado es requerido" }, { status: 400 })
+export async function PATCH(request: Request) {
+  try {
+    const id = extractIdFromUrl(request)
+
+    if (id === null) {
+      return NextResponse.json({ error: "ID inválido o no proporcionado" }, { status: 400 })
     }
 
-    try {
-      const venta = await actualizarEstadoVenta(id, estado)
+    const body = await request.json()
 
-      if (!venta) {
-        return NextResponse.json({ error: "Venta no encontrada" }, { status: 404 })
-      }
-
-      return NextResponse.json(venta)
-    } catch (error) {
-      // Verificar si el error es por falta de stock
-      if (error instanceof Error && error.message.includes("Stock insuficiente")) {
-        return NextResponse.json(
-          {
-            error: error.message,
-          },
-          { status: 400 },
-        )
-      }
-      throw error
+    if (!body.estado) {
+      return NextResponse.json({ error: "Estado no proporcionado" }, { status: 400 })
     }
+
+    const venta = await actualizarEstadoVenta(id, body.estado)
+
+    if (!venta) {
+      return NextResponse.json({ error: "Venta no encontrada" }, { status: 404 })
+    }
+
+    return NextResponse.json(venta)
   } catch (error) {
     console.error(`Error al actualizar estado de venta:`, error)
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })

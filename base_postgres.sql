@@ -182,3 +182,16 @@ ADD COLUMN "datos_combo_modificado" TEXT;
 
 -- Comentario para documentar el propósito del campo
 COMMENT ON COLUMN "DetalleVentas"."datos_combo_modificado" IS 'Almacena en formato JSON los productos y cantidades de un combo modificado';
+
+
+-- Agregar campos para la funcionalidad de embalar
+ALTER TABLE ventas 
+ADD COLUMN medio_comunicacion VARCHAR(20),
+ADD COLUMN dato_comunicacion VARCHAR(100),
+ADD COLUMN correo_usado VARCHAR(50),
+ADD COLUMN pago_envio VARCHAR(20),
+ADD COLUMN cuenta_transferencia VARCHAR(100),
+ADD COLUMN comprobante_pago VARCHAR(100),
+ADD COLUMN requiere_factura BOOLEAN DEFAULT FALSE,
+ADD COLUMN numero_factura VARCHAR(50);
+ADD COLUMN numero_seguimiento VARCHAR(50);

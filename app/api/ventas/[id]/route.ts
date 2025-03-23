@@ -1,11 +1,28 @@
 import { NextResponse } from "next/server"
-import { obtenerVentaPorId, actualizarVenta, eliminarVenta } from "@/lib/venta-service"
+import { actualizarVenta, eliminarVenta, obtenerVentaPorId } from "@/lib/venta-service"
 
-export async function GET(req: Request, { params }: { params: { id: string } | Promise<{ id: string }> }) {
+// Función auxiliar para extraer el ID de la URL
+function extractIdFromUrl(request: Request): number | null {
   try {
-    // Await the entire params object first
-    const resolvedParams = await Promise.resolve(params)
-    const id = Number.parseInt(resolvedParams.id)
+    const url = new URL(request.url)
+    const pathParts = url.pathname.split("/")
+    const idStr = pathParts[pathParts.length - 1]
+    const id = Number.parseInt(idStr, 10)
+    return isNaN(id) ? null : id
+  } catch (error) {
+    console.error("Error al extraer ID de la URL:", error)
+    return null
+  }
+}
+
+export async function GET(request: Request) {
+  try {
+    const id = extractIdFromUrl(request)
+
+    if (id === null) {
+      return NextResponse.json({ error: "ID inválido o no proporcionado" }, { status: 400 })
+    }
+
     const venta = await obtenerVentaPorId(id)
 
     if (!venta) {
@@ -19,13 +36,15 @@ export async function GET(req: Request, { params }: { params: { id: string } | P
   }
 }
 
-export async function PATCH(req: Request, { params }: { params: { id: string } | Promise<{ id: string }> }) {
+export async function PATCH(request: Request) {
   try {
-    // Await the entire params object first
-    const resolvedParams = await Promise.resolve(params)
-    const id = Number.parseInt(resolvedParams.id)
-    const body = await req.json()
+    const id = extractIdFromUrl(request)
 
+    if (id === null) {
+      return NextResponse.json({ error: "ID inválido o no proporcionado" }, { status: 400 })
+    }
+
+    const body = await request.json()
     const venta = await actualizarVenta(id, body)
 
     if (!venta) {
@@ -39,11 +58,14 @@ export async function PATCH(req: Request, { params }: { params: { id: string } |
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: string } | Promise<{ id: string }> }) {
+export async function DELETE(request: Request) {
   try {
-    // Await the entire params object first
-    const resolvedParams = await Promise.resolve(params)
-    const id = Number.parseInt(resolvedParams.id)
+    const id = extractIdFromUrl(request)
+
+    if (id === null) {
+      return NextResponse.json({ error: "ID inválido o no proporcionado" }, { status: 400 })
+    }
+
     const success = await eliminarVenta(id)
 
     if (!success) {
