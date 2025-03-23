@@ -17,6 +17,16 @@ import { Label } from "@/components/ui/label"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import type { Cliente, Producto, Combo } from "@/types"
 import { toast } from "@/components/ui/use-toast"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 // Importar componentes y hooks personalizados
 import { ProductoComboSelector } from "@/components/ventas/producto-combo-selector"
@@ -112,6 +122,13 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
   // Usar hooks personalizados
   const comboEditor = useComboEditor(form, productos)
   const productSearch = useProductSearch(productos, combos, isMayorista, append)
+
+  const [showAddProductDialog, setShowAddProductDialog] = useState(false)
+  const [selectedProductId, setSelectedProductId] = useState<string>("")
+  const [productQuantity, setProductQuantity] = useState<number>(1)
+  const [showStockAlert, setShowStockAlert] = useState(false)
+  const [productosSinStock, setProductosSinStock] = useState<Array<any>>([])
+  const [ventaDataPendiente, setVentaDataPendiente] = useState<any>(null)
 
   const calcularTotal = () => {
     return watchDetalles.reduce((total, detalle) => {
@@ -220,6 +237,38 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
         }),
       }
 
+      // Primero verificamos el stock
+      const verificarResponse = await fetch("/api/ventas/verificar-stock", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(ventaData),
+      })
+
+      const verificarData = await verificarResponse.json()
+
+      if (!verificarData.hayStockSuficiente && verificarData.productosSinStockSuficiente.length > 0) {
+        // Guardar los datos para usarlos después de la confirmación
+        setVentaDataPendiente(ventaData)
+        setProductosSinStock(verificarData.productosSinStockSuficiente)
+        setShowStockAlert(true)
+        setIsLoading(false)
+        return
+      }
+
+      // Si hay stock suficiente o no se requiere confirmación, crear la venta directamente
+      await crearVenta(ventaData)
+    } catch (error) {
+      console.error("Error al crear la venta:", error)
+      toast.error(`Error: ${error.message || "Error desconocido al crear la venta"}`)
+      setIsLoading(false)
+    }
+  }
+
+  // Función para crear la venta después de la verificación
+  const crearVenta = async (ventaData: any) => {
+    try {
       const response = await fetch("/api/ventas", {
         method: "POST",
         headers: {
@@ -249,6 +298,14 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
     } finally {
       setIsLoading(false)
     }
+  }
+
+  // Función para confirmar la creación de la venta a pesar de falta de stock
+  const confirmarCrearVenta = () => {
+    if (ventaDataPendiente) {
+      crearVenta(ventaDataPendiente)
+    }
+    setShowStockAlert(false)
   }
 
   return (
@@ -433,6 +490,47 @@ export const NuevaVentaForm: React.FC<NuevaVentaFormProps> = ({ clientes, produc
           </div>
         </form>
       </Form>
+      {/* Diálogo de alerta para stock insuficiente */}
+      <AlertDialog open={showStockAlert} onOpenChange={setShowStockAlert}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Stock insuficiente</AlertDialogTitle>
+            <AlertDialogDescription>
+              <div className="text-left">
+                <p className="mb-2">Los siguientes productos no tienen stock suficiente:</p>
+                <ul className="list-disc pl-5 space-y-1">
+                  {productosSinStock.map((producto, index) => (
+                    <li key={index} className="text-sm">
+                      {producto.combo ? (
+                        <span>
+                          <strong>{producto.nombre}</strong> (Código: {producto.codigo}) del combo "{producto.combo}"
+                          <br />
+                          <span className="text-xs">
+                            Disponible: {producto.stockActual}, Necesario: {producto.cantidadSolicitada}
+                          </span>
+                        </span>
+                      ) : (
+                        <span>
+                          <strong>{producto.nombre}</strong> (Código: {producto.codigo})
+                          <br />
+                          <span className="text-xs">
+                            Disponible: {producto.stockActual}, Necesario: {producto.cantidadSolicitada}
+                          </span>
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-4">¿Desea crear la venta de todas formas?</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmarCrearVenta}>Crear venta</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

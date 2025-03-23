@@ -129,6 +129,8 @@ export async function crearVenta(
 
       // Variable para controlar si hay stock suficiente para todos los productos
       let hayStockSuficiente = true
+      // Array para almacenar información sobre productos sin stock suficiente
+      const productosSinStockSuficiente = []
 
       // Validar que los productos existan y verificar si hay stock suficiente
       for (const detalle of detalles) {
@@ -146,6 +148,20 @@ export async function crearVenta(
           // Verificar si hay stock suficiente, pero permitir continuar si no lo hay
           if (stockActual < detalle.cantidad) {
             hayStockSuficiente = false
+
+            // Obtener información del producto
+            const productoInfo = await client.query("SELECT nombre, codigo FROM Productos WHERE id = $1", [
+              detalle.id_producto,
+            ])
+
+            productosSinStockSuficiente.push({
+              id: detalle.id_producto,
+              nombre: productoInfo.rows[0]?.nombre || `Producto #${detalle.id_producto}`,
+              codigo: productoInfo.rows[0]?.codigo || "N/A",
+              stockActual,
+              cantidadSolicitada: detalle.cantidad,
+            })
+
             console.log(
               `Stock insuficiente para el producto con ID ${detalle.id_producto}. Disponible: ${stockActual}, Solicitado: ${detalle.cantidad}`,
             )
@@ -160,7 +176,7 @@ export async function crearVenta(
 
           // Verificar stock para cada producto del combo
           const comboDetallesResult = await client.query(
-            `SELECT dc.id_producto, dc.cantidad, p.nombre, p.stock
+            `SELECT dc.id_producto, dc.cantidad, p.nombre, p.stock, p.codigo
              FROM DetalleCombos dc
              JOIN Productos p ON dc.id_producto = p.id
              WHERE dc.id_combo = $1`,
@@ -174,6 +190,19 @@ export async function crearVenta(
             // Verificar si hay stock suficiente, pero permitir continuar si no lo hay
             if (stockActual < cantidadNecesaria) {
               hayStockSuficiente = false
+
+              // Obtener información del combo
+              const comboInfo = await client.query("SELECT nombre FROM Combos WHERE id = $1", [detalle.id_producto])
+
+              productosSinStockSuficiente.push({
+                id: comboDetalle.id_producto,
+                nombre: comboDetalle.nombre,
+                codigo: comboDetalle.codigo || "N/A",
+                stockActual,
+                cantidadSolicitada: cantidadNecesaria,
+                combo: comboInfo.rows[0]?.nombre || `Combo #${detalle.id_producto}`,
+              })
+
               console.log(
                 `Stock insuficiente para el producto "${comboDetalle.nombre}" (ID: ${comboDetalle.id_producto}) del combo. Disponible: ${stockActual}, Necesario: ${cantidadNecesaria}`,
               )
@@ -185,20 +214,14 @@ export async function crearVenta(
       // Insertar la venta
       console.log("Insertando venta en la base de datos")
 
-      // Determinar el estado inicial según el stock
-      const estadoInicial = hayStockSuficiente ? "Para embalar" : "Pendiente"
+      // Siempre establecer el estado inicial como "Pendiente"
+      const estadoInicial = "Pendiente"
       console.log(`Estado inicial de la venta: ${estadoInicial} (Hay stock suficiente: ${hayStockSuficiente})`)
 
-      // En la parte donde se inserta la venta, establecer el estado según el stock
+      // En la parte donde se inserta la venta, establecer el estado como "Pendiente"
       const ventaResult = await client.query(
         "INSERT INTO Ventas (id_cliente, fecha, total, cerrado, estado) VALUES ($1, $2, $3, $4, $5) RETURNING *",
-        [
-          venta.id_cliente || null,
-          venta.fecha || new Date(),
-          venta.total,
-          venta.cerrado || false,
-          estadoInicial, // Estado según el stock
-        ],
+        [venta.id_cliente || null, venta.fecha || new Date(), venta.total, venta.cerrado || false, estadoInicial],
       )
 
       const nuevaVenta = ventaResult.rows[0]
@@ -301,7 +324,11 @@ export async function crearVenta(
       await client.query("COMMIT")
       console.log("Transacción completada exitosamente")
 
-      return nuevaVenta
+      return {
+        ...nuevaVenta,
+        hayStockSuficiente,
+        productosSinStockSuficiente,
+      }
     } catch (error) {
       console.error("Error en la transacción, haciendo ROLLBACK:", error)
       await client.query("ROLLBACK")
@@ -784,6 +811,148 @@ export async function obtenerDetallesComboModificado(detalle: DetalleVenta): Pro
   } catch (error) {
     console.error("Error al obtener detalles de combo modificado:", error)
     return []
+  }
+}
+
+// Función para verificar el stock sin crear la venta
+export async function verificarStockVenta(
+  detalles: Array<
+    Omit<DetalleVenta, "id" | "id_venta"> & {
+      es_combo?: boolean
+      combo_modificado?: boolean
+      items?: { id_producto: number; cantidad: number }[]
+    }
+  >,
+): Promise<{ hayStockSuficiente: boolean; productosSinStockSuficiente: any[] }> {
+  try {
+    const client = await import("./db").then((module) => module.getClient())
+
+    try {
+      // Variable para controlar si hay stock suficiente para todos los productos
+      let hayStockSuficiente = true
+      // Array para almacenar información sobre productos sin stock suficiente
+      const productosSinStockSuficiente = []
+
+      // Validar que los productos existan y verificar si hay stock suficiente
+      for (const detalle of detalles) {
+        console.log("Verificando stock para detalle:", detalle)
+
+        if (!detalle.es_combo) {
+          // Verificar stock para productos normales
+          const stockResult = await client.query("SELECT id, nombre, codigo, stock FROM Productos WHERE id = $1", [
+            detalle.id_producto,
+          ])
+
+          if (stockResult.rows.length === 0) {
+            throw new Error(`El producto con ID ${detalle.id_producto} no existe`)
+          }
+
+          const producto = stockResult.rows[0]
+          const stockActual = producto.stock
+
+          // Verificar si hay stock suficiente
+          if (stockActual < detalle.cantidad) {
+            hayStockSuficiente = false
+
+            productosSinStockSuficiente.push({
+              id: detalle.id_producto,
+              nombre: producto.nombre,
+              codigo: producto.codigo || "N/A",
+              stockActual,
+              cantidadSolicitada: detalle.cantidad,
+            })
+
+            console.log(
+              `Stock insuficiente para el producto "${producto.nombre}" (ID: ${detalle.id_producto}). Disponible: ${stockActual}, Solicitado: ${detalle.cantidad}`,
+            )
+          }
+        } else if (detalle.combo_modificado && detalle.items) {
+          // Verificar stock para combos modificados
+          for (const item of detalle.items) {
+            const stockResult = await client.query("SELECT id, nombre, codigo, stock FROM Productos WHERE id = $1", [
+              item.id_producto,
+            ])
+
+            if (stockResult.rows.length === 0) {
+              throw new Error(`El producto con ID ${item.id_producto} no existe`)
+            }
+
+            const producto = stockResult.rows[0]
+            const stockActual = producto.stock
+            const cantidadNecesaria = item.cantidad
+
+            // Verificar si hay stock suficiente
+            if (stockActual < cantidadNecesaria) {
+              hayStockSuficiente = false
+
+              productosSinStockSuficiente.push({
+                id: item.id_producto,
+                nombre: producto.nombre,
+                codigo: producto.codigo || "N/A",
+                stockActual,
+                cantidadSolicitada: cantidadNecesaria,
+                combo: "Combo modificado",
+              })
+
+              console.log(
+                `Stock insuficiente para el producto "${producto.nombre}" (ID: ${item.id_producto}) del combo modificado. Disponible: ${stockActual}, Necesario: ${cantidadNecesaria}`,
+              )
+            }
+          }
+        } else {
+          // Verificar stock para combos normales
+          const comboResult = await client.query("SELECT id, nombre FROM Combos WHERE id = $1", [detalle.id_producto])
+
+          if (comboResult.rows.length === 0) {
+            throw new Error(`El combo con ID ${detalle.id_producto} no existe`)
+          }
+
+          const combo = comboResult.rows[0]
+
+          // Verificar stock para cada producto del combo
+          const comboDetallesResult = await client.query(
+            `SELECT dc.id_producto, dc.cantidad, p.nombre, p.codigo, p.stock
+             FROM DetalleCombos dc
+             JOIN Productos p ON dc.id_producto = p.id
+             WHERE dc.id_combo = $1`,
+            [detalle.id_producto],
+          )
+
+          for (const comboDetalle of comboDetallesResult.rows) {
+            const stockActual = comboDetalle.stock
+            const cantidadNecesaria = comboDetalle.cantidad * detalle.cantidad
+
+            // Verificar si hay stock suficiente
+            if (stockActual < cantidadNecesaria) {
+              hayStockSuficiente = false
+
+              productosSinStockSuficiente.push({
+                id: comboDetalle.id_producto,
+                nombre: comboDetalle.nombre,
+                codigo: comboDetalle.codigo || "N/A",
+                stockActual,
+                cantidadSolicitada: cantidadNecesaria,
+                combo: combo.nombre,
+              })
+
+              console.log(
+                `Stock insuficiente para el producto "${comboDetalle.nombre}" (ID: ${comboDetalle.id_producto}) del combo "${combo.nombre}". Disponible: ${stockActual}, Necesario: ${cantidadNecesaria}`,
+              )
+            }
+          }
+        }
+      }
+
+      return {
+        hayStockSuficiente,
+        productosSinStockSuficiente,
+      }
+    } finally {
+      client.release()
+    }
+  } catch (error) {
+    console.error("Error al verificar stock:", error)
+    throw error
   }
 }
 
