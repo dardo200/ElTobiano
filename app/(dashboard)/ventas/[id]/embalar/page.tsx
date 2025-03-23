@@ -27,7 +27,8 @@ export default function EmbalarVentaPage() {
   // Estados para los nuevos campos
   const [medioComunicacion, setMedioComunicacion] = useState<string>("WhatsApp")
   const [datoComunicacion, setDatoComunicacion] = useState<string>("")
-  const [correoUsado, setCorreoUsado] = useState<string>("Vía Cargo") // Cambiado a correo postal
+  const [correoUsado, setCorreoUsado] = useState<string>("Vía Cargo")
+  const [otroCorreo, setOtroCorreo] = useState<string>("")
   const [pagoEnvio, setPagoEnvio] = useState<string>("Transferencia")
   const [cuentaTransferencia, setCuentaTransferencia] = useState<string>("")
   const [comprobantePago, setComprobantePago] = useState<string>("")
@@ -45,7 +46,18 @@ export default function EmbalarVentaPage() {
           // Prellenar campos si ya existen
           if (data.medio_comunicacion) setMedioComunicacion(data.medio_comunicacion)
           if (data.dato_comunicacion) setDatoComunicacion(data.dato_comunicacion)
-          if (data.correo_usado) setCorreoUsado(data.correo_usado)
+
+          // Manejar el correo usado y el campo "otro"
+          if (data.correo_usado) {
+            const correosEstándar = ["Vía Cargo", "Credifin", "LEP", "Correo Argentino", "Comisionista"]
+            if (correosEstándar.includes(data.correo_usado)) {
+              setCorreoUsado(data.correo_usado)
+            } else {
+              setCorreoUsado("Otro")
+              setOtroCorreo(data.correo_usado)
+            }
+          }
+
           if (data.pago_envio) setPagoEnvio(data.pago_envio)
           if (data.cuenta_transferencia) setCuentaTransferencia(data.cuenta_transferencia)
           if (data.comprobante_pago) setComprobantePago(data.comprobante_pago)
@@ -83,6 +95,9 @@ export default function EmbalarVentaPage() {
 
     setIsSaving(true)
 
+    // Determinar el valor final del correo usado
+    const correoFinal = correoUsado === "Otro" ? otroCorreo : correoUsado
+
     try {
       // Primero actualizamos los datos adicionales
       const updateResponse = await fetch(`/api/ventas/${venta.id}`, {
@@ -93,7 +108,7 @@ export default function EmbalarVentaPage() {
         body: JSON.stringify({
           medio_comunicacion: medioComunicacion,
           dato_comunicacion: datoComunicacion,
-          correo_usado: correoUsado,
+          correo_usado: correoFinal,
           pago_envio: pagoEnvio,
           cuenta_transferencia: cuentaTransferencia,
           comprobante_pago: comprobantePago,
@@ -250,6 +265,18 @@ export default function EmbalarVentaPage() {
                   <Label htmlFor="otro-correo">Otro</Label>
                 </div>
               </RadioGroup>
+
+              {correoUsado === "Otro" && (
+                <div className="mt-2">
+                  <Input
+                    id="otroCorreo"
+                    value={otroCorreo}
+                    onChange={(e) => setOtroCorreo(e.target.value)}
+                    placeholder="Especifique el servicio de correo"
+                    required={correoUsado === "Otro"}
+                  />
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

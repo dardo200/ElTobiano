@@ -4,17 +4,17 @@ import React from "react"
 
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { ArrowLeft, Printer, Truck, ChevronDown, ChevronUp, FileText, Package, CheckCircle } from "lucide-react"
+import { ArrowLeft, Printer, Truck, ChevronDown, ChevronUp, FileText, Package, CheckCircle, Tag } from "lucide-react"
 import { Heading } from "@/components/ui/heading"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import type { Venta, DetalleVenta } from "@/types"
+import type { Venta, DetalleVenta, Cliente } from "@/types"
 
 // Importar las funciones de generación de PDF y toast correctamente
 import { generarPresupuestoPDF, descargarPDF } from "@/lib/pdf-service"
-import { toast } from "@/components/ui/toast/use-toast"
+import { useToast } from "@/components/ui/use-toast"
 
 interface ProductoCombo {
   id: number
@@ -26,12 +26,15 @@ interface ProductoCombo {
 export default function DetalleVentaPage() {
   const params = useParams()
   const router = useRouter()
+  const { toast } = useToast()
   const [venta, setVenta] = useState<Venta | null>(null)
+  const [clienteCompleto, setClienteCompleto] = useState<Cliente | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [expandedCombos, setExpandedCombos] = useState<Record<number, boolean>>({})
   const [combosDetalles, setCombosDetalles] = useState<Record<number, ProductoCombo[]>>({})
   // Añadir un nuevo estado para controlar la generación del PDF
   const [generandoPDF, setGenerandoPDF] = useState(false)
+  const [generandoEtiqueta, setGenerandoEtiqueta] = useState(false)
 
   // Añadir la función para generar y descargar el PDF
   const handleGenerarPresupuesto = async () => {
@@ -57,6 +60,186 @@ export default function DetalleVentaPage() {
     }
   }
 
+  // Función para generar la etiqueta de envío
+  const handleGenerarEtiqueta = async () => {
+    if (!venta || !clienteCompleto) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se puede generar la etiqueta sin datos del cliente",
+      })
+      return
+    }
+
+    try {
+      setGenerandoEtiqueta(true)
+
+      // Crear un elemento div para la etiqueta
+      const etiquetaDiv = document.createElement("div")
+      etiquetaDiv.className = "etiqueta-envio"
+      etiquetaDiv.style.width = "400px"
+      etiquetaDiv.style.padding = "20px"
+      etiquetaDiv.style.border = "2px solid black"
+      etiquetaDiv.style.fontFamily = "Arial, sans-serif"
+
+      // Encabezado con número de venta
+      const header = document.createElement("div")
+      header.style.display = "flex"
+      header.style.justifyContent = "flex-end"
+      header.style.alignItems = "center"
+      header.style.marginBottom = "15px"
+
+      // Número de venta
+      const ventaNumero = document.createElement("div")
+      ventaNumero.style.fontSize = "18px"
+      ventaNumero.style.fontWeight = "bold"
+      ventaNumero.style.padding = "5px 10px"
+      ventaNumero.style.border = "1px solid #000"
+      ventaNumero.style.borderRadius = "4px"
+      ventaNumero.innerHTML = `#${venta.id}`
+
+      header.appendChild(ventaNumero)
+      etiquetaDiv.appendChild(header)
+
+      // Título con logo
+      const titulo = document.createElement("div")
+      titulo.style.textAlign = "center"
+      titulo.style.marginBottom = "20px"
+      titulo.style.display = "flex"
+      titulo.style.justifyContent = "center"
+      titulo.style.alignItems = "center"
+
+      // Crear un elemento img para el logo
+      const logoImg = document.createElement("img")
+      logoImg.src = "/images/logo-empresa.png" // Ruta a la imagen del logo
+      logoImg.style.height = "60px"
+      logoImg.style.marginBottom = "10px"
+      titulo.appendChild(logoImg)
+
+      etiquetaDiv.appendChild(titulo)
+
+      // Datos de la empresa (remitente)
+      const datosEmpresa = document.createElement("div")
+      datosEmpresa.style.marginBottom = "20px"
+      datosEmpresa.innerHTML = `
+        <h2 style="font-size: 16px; margin-bottom: 5px; border-bottom: 1px solid #ccc; padding-bottom: 5px;">REMITENTE:</h2>
+        <p style="margin: 2px 0; font-size: 14px;"><strong>Empresa:</strong> El Tobiano Talabarteria</p>
+        <p style="margin: 2px 0; font-size: 14px;"><strong>Ciudad:</strong> Río Cuarto, Córdoba</p>
+        <p style="margin: 2px 0; font-size: 14px;"><strong>CP:</strong> 5800</p>
+        <p style="margin: 2px 0; font-size: 14px;"><strong>Teléfono:</strong> +54 9 (358) 600-9786</p>
+      `
+      etiquetaDiv.appendChild(datosEmpresa)
+
+      // Datos del cliente (destinatario)
+      const datosCliente = document.createElement("div")
+      datosCliente.style.marginBottom = "20px"
+
+      // Agreguemos un console.log para depurar los datos del cliente
+      console.log("Datos del cliente para etiqueta:", {
+        nombre: clienteCompleto.nombre,
+        dni: clienteCompleto.dni,
+        direccion: clienteCompleto.direccion,
+        ciudad: clienteCompleto.ciudad,
+        provincia: clienteCompleto.provincia,
+        cp: clienteCompleto.codigo_postal || clienteCompleto.cp,
+        telefono: clienteCompleto.telefono,
+        email: clienteCompleto.email,
+      })
+
+      datosCliente.innerHTML = `
+        <h2 style="font-size: 16px; margin-bottom: 5px; border-bottom: 1px solid #ccc; padding-bottom: 5px;">DESTINATARIO:</h2>
+        <p style="margin: 2px 0; font-size: 14px;"><strong>Nombre:</strong> ${clienteCompleto.nombre}</p>
+        <p style="margin: 2px 0; font-size: 14px;"><strong>DNI:</strong> ${clienteCompleto.dni || "No especificado"}</p>
+        <p style="margin: 2px 0; font-size: 14px;"><strong>Dirección:</strong> ${clienteCompleto.direccion || "No especificada"}</p>
+        <p style="margin: 2px 0; font-size: 14px;"><strong>Ciudad:</strong> ${clienteCompleto.ciudad || "No especificada"}</p>
+        <p style="margin: 2px 0; font-size: 14px;"><strong>Provincia:</strong> ${clienteCompleto.provincia || "No especificada"}</p>
+        <p style="margin: 2px 0; font-size: 14px;"><strong>CP:</strong> ${clienteCompleto.codigo_postal || clienteCompleto.cp || "No especificado"}</p>
+        <p style="margin: 2px 0; font-size: 14px;"><strong>Teléfono:</strong> ${clienteCompleto.telefono || "No especificado"}</p>
+        <p style="margin: 2px 0; font-size: 14px;"><strong>Email:</strong> ${clienteCompleto.email || "No especificado"}</p>
+      `
+      etiquetaDiv.appendChild(datosCliente)
+
+      // Datos del envío
+      const datosEnvio = document.createElement("div")
+      datosEnvio.style.marginBottom = "20px"
+      datosEnvio.innerHTML = `
+        <h2 style="font-size: 16px; margin-bottom: 5px; border-bottom: 1px solid #ccc; padding-bottom: 5px;">DATOS DEL ENVÍO:</h2>
+        <p style="margin: 2px 0; font-size: 14px;"><strong>Servicio de correo:</strong> ${venta.correo_usado || "No especificado"}</p>
+        <p style="margin: 2px 0; font-size: 14px;"><strong>Fecha:</strong> ${new Date(venta.fecha).toLocaleDateString()}</p>
+        ${venta.numero_seguimiento ? `<p style="margin: 2px 0; font-size: 14px;"><strong>Número de seguimiento:</strong> ${venta.numero_seguimiento}</p>` : ""}
+      `
+      etiquetaDiv.appendChild(datosEnvio)
+
+      // Información adicional
+      const infoAdicional = document.createElement("div")
+      infoAdicional.style.marginTop = "20px"
+      infoAdicional.style.padding = "10px"
+      infoAdicional.style.backgroundColor = "#f5f5f5"
+      infoAdicional.style.borderRadius = "4px"
+      infoAdicional.style.textAlign = "center"
+      infoAdicional.innerHTML = `
+        <p style="margin: 2px 0; font-size: 12px;">CONTENIDO: Productos varios - Manipular con cuidado</p>
+        <p style="margin: 2px 0; font-size: 12px; font-weight: bold;">- ESTE LADO HACIA ARRIBA -</p>
+      `
+      etiquetaDiv.appendChild(infoAdicional)
+
+      // Crear una ventana emergente para imprimir
+      const ventanaImpresion = window.open("", "_blank")
+      if (!ventanaImpresion) {
+        throw new Error("No se pudo abrir la ventana de impresión. Verifique que no esté bloqueada por el navegador.")
+      }
+
+      ventanaImpresion.document.write(`
+        <html>
+          <head>
+            <title>Etiqueta de Envío - Venta #${venta.id}</title>
+            <style>
+              body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+              @media print {
+                body { margin: 0; padding: 0; }
+                .no-print { display: none; }
+              }
+              .print-button {
+                display: block;
+                margin: 20px auto;
+                padding: 10px 20px;
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 16px;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="no-print" style="text-align: center; margin-bottom: 20px;">
+              <h1>Etiqueta de Envío - Venta #${venta.id}</h1>
+              <button class="print-button" onclick="window.print(); setTimeout(() => window.close(), 500);">Imprimir Etiqueta</button>
+            </div>
+            ${etiquetaDiv.outerHTML}
+          </body>
+        </html>
+      `)
+
+      ventanaImpresion.document.close()
+
+      toast({
+        title: "Etiqueta generada",
+        description: "La etiqueta de envío se ha generado correctamente",
+      })
+    } catch (error) {
+      console.error("Error al generar la etiqueta:", error)
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error instanceof Error ? error.message : "No se pudo generar la etiqueta de envío",
+      })
+    } finally {
+      setGenerandoEtiqueta(false)
+    }
+  }
+
   useEffect(() => {
     const fetchVenta = async () => {
       try {
@@ -64,6 +247,11 @@ export default function DetalleVentaPage() {
         if (response.ok) {
           const data = await response.json()
           setVenta(data)
+
+          // Si la venta tiene un cliente, obtener los datos completos del cliente
+          if (data.cliente && data.cliente.id) {
+            await fetchClienteCompleto(data.cliente.id)
+          }
 
           // Inicializar la carga de detalles de combos
           if (data.detalles && data.detalles.length > 0) {
@@ -101,6 +289,22 @@ export default function DetalleVentaPage() {
 
     fetchVenta()
   }, [params.id, router])
+
+  // Función para obtener los datos completos del cliente
+  const fetchClienteCompleto = async (clienteId: number) => {
+    try {
+      const response = await fetch(`/api/clientes/${clienteId}`)
+      if (response.ok) {
+        const data = await response.json()
+        setClienteCompleto(data)
+        console.log("Datos completos del cliente:", data)
+      } else {
+        console.error("Error al obtener los datos completos del cliente")
+      }
+    } catch (error) {
+      console.error("Error al obtener los datos completos del cliente:", error)
+    }
+  }
 
   const loadCombosDetalles = async (combosIds: number[]) => {
     if (!combosIds.length) return
@@ -212,10 +416,17 @@ export default function DetalleVentaPage() {
             <Printer className="mr-2 h-4 w-4" />
             Imprimir
           </Button>
-          <Button variant="default" onClick={handleGenerarPresupuesto} disabled={generandoPDF}>
-            <FileText className="mr-2 h-4 w-4" />
-            {generandoPDF ? "Generando..." : "Generar Presupuesto"}
-          </Button>
+          {venta.estado === "Despachado" || venta.estado === "Completado" ? (
+            <Button variant="default" onClick={handleGenerarEtiqueta} disabled={generandoEtiqueta}>
+              <Tag className="mr-2 h-4 w-4" />
+              {generandoEtiqueta ? "Generando..." : "Generar Etiqueta"}
+            </Button>
+          ) : (
+            <Button variant="default" onClick={handleGenerarPresupuesto} disabled={generandoPDF}>
+              <FileText className="mr-2 h-4 w-4" />
+              {generandoPDF ? "Generando..." : "Generar Presupuesto"}
+            </Button>
+          )}
         </div>
       </div>
       <Separator />
@@ -308,6 +519,18 @@ export default function DetalleVentaPage() {
                     <span>{venta.cliente.direccion}</span>
                   </div>
                 )}
+                {clienteCompleto?.ciudad && (
+                  <div className="flex justify-between">
+                    <span className="font-medium">Ciudad:</span>
+                    <span>{clienteCompleto.ciudad}</span>
+                  </div>
+                )}
+                {clienteCompleto?.provincia && (
+                  <div className="flex justify-between">
+                    <span className="font-medium">Provincia:</span>
+                    <span>{clienteCompleto.provincia}</span>
+                  </div>
+                )}
               </div>
             ) : (
               <p className="text-muted-foreground">Cliente no registrado</p>
@@ -368,7 +591,7 @@ export default function DetalleVentaPage() {
               )}
               {venta.correo_usado && (
                 <div className="space-y-1">
-                  <span className="font-medium">Correo electrónico:</span>
+                  <span className="font-medium">Servicio de correo postal:</span>
                   <p>{venta.correo_usado}</p>
                 </div>
               )}
