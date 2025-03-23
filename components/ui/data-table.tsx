@@ -25,6 +25,7 @@ interface DataTableProps<TData, TValue> {
   searchPlaceholder?: string
   deleteRow?: (id: number) => Promise<boolean>
   filterFunction?: (row: TData, filterValue: string) => boolean
+  showSearchInput?: boolean // Nueva propiedad para controlar la visibilidad del campo de búsqueda
 }
 
 export function DataTable<TData, TValue>({
@@ -34,6 +35,7 @@ export function DataTable<TData, TValue>({
   searchPlaceholder = "Buscar...",
   deleteRow,
   filterFunction,
+  showSearchInput = true, // Por defecto, mostrar el campo de búsqueda
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -58,6 +60,7 @@ export function DataTable<TData, TValue>({
     getPaginationRowModel: getPaginationRowModel(),
     onSortingChange: setSorting,
     getSortedRowModel: getSortedRowModel(),
+    onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: setGlobalFilter,
     globalFilterFn: customFilterFn,
     getFilteredRowModel: getFilteredRowModel(),
@@ -73,25 +76,29 @@ export function DataTable<TData, TValue>({
 
   return (
     <div>
-      <div className="flex items-center py-4">
-        <Input
-          placeholder={searchPlaceholder}
-          value={
-            filterFunction
-              ? globalFilter
-              : ((searchKey && (table.getColumn(searchKey)?.getFilterValue() as string)) ?? "")
-          }
-          onChange={(event) => {
-            const value = event.target.value
-            if (filterFunction) {
-              setGlobalFilter(value)
-            } else if (searchKey) {
-              table.getColumn(searchKey)?.setFilterValue(value)
+      {showSearchInput && (
+        <div className="flex items-center py-4">
+          <Input
+            placeholder={searchPlaceholder}
+            value={
+              filterFunction
+                ? globalFilter
+                : searchKey
+                  ? (table.getColumn(searchKey)?.getFilterValue() as string) || ""
+                  : ""
             }
-          }}
-          className="max-w-sm"
-        />
-      </div>
+            onChange={(event) => {
+              const value = event.target.value
+              if (filterFunction) {
+                setGlobalFilter(value)
+              } else if (searchKey) {
+                table.getColumn(searchKey)?.setFilterValue(value)
+              }
+            }}
+            className="max-w-sm"
+          />
+        </div>
+      )}
       <div className="rounded-md border">
         <Table>
           <TableHeader>

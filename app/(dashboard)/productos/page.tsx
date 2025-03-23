@@ -170,6 +170,7 @@ export default function ProductosPage() {
             columns={columns}
             data={filteredProductos}
             deleteRow={handleDeleteProducto}
+            showSearchInput={false}
             initialState={{
               sorting: [
                 {

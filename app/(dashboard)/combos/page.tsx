@@ -92,7 +92,11 @@ export default function CombosPage() {
               className="max-w-sm"
             />
           </div>
-          <DataTable columns={columns} data={filteredCombos} />
+          <DataTable
+            columns={columns}
+            data={filteredCombos}
+            showSearchInput={false} // Ocultar el campo de búsqueda del DataTable
+          />
         </>
       )}
     </>
