@@ -108,7 +108,7 @@ export async function obtenerVentaPorId(id: number): Promise<Venta | null> {
   }
 }
 
-// Modificar la función crearVenta para manejar el estado automático según el stock
+// Modificar la función crearVenta para que no descuente stock al crear la venta
 export async function crearVenta(
   venta: Omit<Venta, "id">,
   detalles: Array<
@@ -254,14 +254,7 @@ export async function crearVenta(
             ],
           )
 
-          // Process each item in the modified combo
-          for (const item of detalle.items) {
-            // Update stock for each product in the modified combo
-            await client.query("UPDATE Productos SET stock = stock - $1 WHERE id = $2", [
-              item.cantidad,
-              item.id_producto,
-            ])
-          }
+          // Ya no actualizamos el stock aquí, se hará cuando cambie a "Para embalar"
         } else if (detalle.es_combo) {
           // Original code for handling combos
           // Verificar que el combo exista
@@ -287,18 +280,7 @@ export async function crearVenta(
             [nuevaVenta.id, detalle.id_producto, detalle.cantidad, detalle.precio, true],
           )
 
-          // Si es un combo, obtener los productos del combo y actualizar el stock
-          const comboDetallesResult = await client.query(
-            "SELECT id_producto, cantidad FROM DetalleCombos WHERE id_combo = $1",
-            [detalle.id_producto],
-          )
-
-          for (const comboDetalle of comboDetallesResult.rows) {
-            await client.query("UPDATE Productos SET stock = stock - $1 WHERE id = $2", [
-              comboDetalle.cantidad * detalle.cantidad,
-              comboDetalle.id_producto,
-            ])
-          }
+          // Ya no actualizamos el stock aquí, se hará cuando cambie a "Para embalar"
         } else {
           // Original code for handling products
           // Verificar que el producto exista
@@ -313,11 +295,7 @@ export async function crearVenta(
             [nuevaVenta.id, detalle.id_producto, detalle.cantidad, detalle.precio, false],
           )
 
-          // Actualizar el stock directamente en la tabla Productos
-          await client.query("UPDATE Productos SET stock = stock - $1 WHERE id = $2", [
-            detalle.cantidad,
-            detalle.id_producto,
-          ])
+          // Ya no actualizamos el stock aquí, se hará cuando cambie a "Para embalar"
         }
       }
 
@@ -343,7 +321,7 @@ export async function crearVenta(
   }
 }
 
-// Modificar la función actualizarEstadoVenta para verificar el stock antes de cambiar a "Para embalar"
+// Modificar la función actualizarEstadoVenta para descontar stock cuando se cambia a "Para embalar"
 export async function actualizarEstadoVenta(id: number, estado: string): Promise<Venta | null> {
   try {
     const client = await import("./db").then((module) => module.getClient())
@@ -382,6 +360,45 @@ export async function actualizarEstadoVenta(id: number, estado: string): Promise
                 stockActual,
                 cantidadNecesaria: detalle.cantidad,
               })
+            }
+          } else if (detalle.datos_combo_modificado) {
+            // Verificar stock para combos modificados
+            try {
+              const items = JSON.parse(detalle.datos_combo_modificado)
+
+              for (const item of items) {
+                const stockResult = await client.query(
+                  "SELECT id, nombre, codigo, stock FROM Productos WHERE id = $1",
+                  [item.id_producto],
+                )
+
+                if (stockResult.rows.length === 0) {
+                  throw new Error(`El producto con ID ${item.id_producto} no existe`)
+                }
+
+                const producto = stockResult.rows[0]
+                const stockActual = producto.stock
+                const cantidadNecesaria = item.cantidad * detalle.cantidad
+
+                if (stockActual < cantidadNecesaria) {
+                  // Obtener información del combo
+                  const comboResult = await client.query("SELECT nombre FROM Combos WHERE id = $1", [
+                    detalle.id_producto,
+                  ])
+
+                  productosConStockInsuficiente.push({
+                    id: producto.id,
+                    nombre: producto.nombre,
+                    codigo: producto.codigo,
+                    stockActual,
+                    cantidadNecesaria,
+                    combo: `${comboResult.rows[0]?.nombre || `Combo #${detalle.id_producto}`} (Modificado)`,
+                  })
+                }
+              }
+            } catch (error) {
+              console.error("Error al procesar datos de combo modificado:", error)
+              throw error
             }
           } else {
             // Verificar stock para cada producto del combo
@@ -430,6 +447,45 @@ export async function actualizarEstadoVenta(id: number, estado: string): Promise
           })
 
           throw new Error(mensajeError)
+        }
+
+        // Si hay stock suficiente, actualizar el stock de los productos
+        for (const detalle of detallesResult.rows) {
+          if (!detalle.es_combo) {
+            // Actualizar stock para productos normales
+            await client.query("UPDATE Productos SET stock = stock - $1 WHERE id = $2", [
+              detalle.cantidad,
+              detalle.id_producto,
+            ])
+          } else if (detalle.datos_combo_modificado) {
+            // Actualizar stock para combos modificados
+            try {
+              const items = JSON.parse(detalle.datos_combo_modificado)
+
+              for (const item of items) {
+                await client.query("UPDATE Productos SET stock = stock - $1 WHERE id = $2", [
+                  item.cantidad * detalle.cantidad,
+                  item.id_producto,
+                ])
+              }
+            } catch (error) {
+              console.error("Error al procesar datos de combo modificado:", error)
+              throw error
+            }
+          } else {
+            // Actualizar stock para combos normales
+            const comboDetallesResult = await client.query(
+              "SELECT id_producto, cantidad FROM DetalleCombos WHERE id_combo = $1",
+              [detalle.id_producto],
+            )
+
+            for (const comboDetalle of comboDetallesResult.rows) {
+              await client.query("UPDATE Productos SET stock = stock - $1 WHERE id = $2", [
+                comboDetalle.cantidad * detalle.cantidad,
+                comboDetalle.id_producto,
+              ])
+            }
+          }
         }
       }
 
@@ -584,29 +640,53 @@ export async function eliminarVenta(id: number): Promise<boolean> {
     try {
       await client.query("BEGIN")
 
-      // Obtener los detalles de la venta
+      // Obtener los detalles de la venta y su estado actual
+      const ventaResult = await client.query("SELECT estado FROM Ventas WHERE id = $1", [id])
+
+      if (ventaResult.rows.length === 0) {
+        throw new Error(`La venta con ID ${id} no existe`)
+      }
+
+      const estadoVenta = ventaResult.rows[0].estado
       const detallesResult = await client.query("SELECT * FROM DetalleVentas WHERE id_venta = $1", [id])
 
-      // Restaurar el stock de los productos
-      for (const detalle of detallesResult.rows) {
-        if (!detalle.es_combo) {
-          // Si es un producto normal, restaurar su stock directamente en la tabla Productos
-          await client.query("UPDATE Productos SET stock = stock + $1 WHERE id = $2", [
-            detalle.cantidad,
-            detalle.id_producto,
-          ])
-        } else {
-          // Si es un combo, obtener sus productos y restaurar el stock de cada uno
-          const comboDetallesResult = await client.query(
-            "SELECT id_producto, cantidad FROM DetalleCombos WHERE id_combo = $1",
-            [detalle.id_producto],
-          )
-
-          for (const comboDetalle of comboDetallesResult.rows) {
+      // Restaurar el stock de los productos solo si la venta estaba en estado "Para embalar" o posterior
+      // ya que solo en esos estados se ha descontado el stock
+      if (estadoVenta !== "Pendiente") {
+        for (const detalle of detallesResult.rows) {
+          if (!detalle.es_combo) {
+            // Si es un producto normal, restaurar su stock directamente en la tabla Productos
             await client.query("UPDATE Productos SET stock = stock + $1 WHERE id = $2", [
-              comboDetalle.cantidad * detalle.cantidad,
-              comboDetalle.id_producto,
+              detalle.cantidad,
+              detalle.id_producto,
             ])
+          } else if (detalle.datos_combo_modificado) {
+            // Si es un combo modificado, restaurar el stock de cada producto según los datos modificados
+            try {
+              const items = JSON.parse(detalle.datos_combo_modificado)
+              for (const item of items) {
+                await client.query("UPDATE Productos SET stock = stock + $1 WHERE id = $2", [
+                  item.cantidad * detalle.cantidad,
+                  item.id_producto,
+                ])
+              }
+            } catch (error) {
+              console.error("Error al procesar datos de combo modificado:", error)
+              throw error
+            }
+          } else {
+            // Si es un combo normal, obtener sus productos y restaurar el stock de cada uno
+            const comboDetallesResult = await client.query(
+              "SELECT id_producto, cantidad FROM DetalleCombos WHERE id_combo = $1",
+              [detalle.id_producto],
+            )
+
+            for (const comboDetalle of comboDetallesResult.rows) {
+              await client.query("UPDATE Productos SET stock = stock + $1 WHERE id = $2", [
+                comboDetalle.cantidad * detalle.cantidad,
+                comboDetalle.id_producto,
+              ])
+            }
           }
         }
       }
@@ -632,8 +712,7 @@ export async function eliminarVenta(id: number): Promise<boolean> {
   }
 }
 
-// Agregar esta función al archivo existente
-
+// Modificar esta función para que no descuente stock al actualizar detalles
 export async function actualizarDetallesVenta(
   id: number,
   detalles: Array<DetalleVenta & { es_combo?: boolean; datos_combo_modificado?: string }>,
@@ -644,29 +723,54 @@ export async function actualizarDetallesVenta(
     try {
       await client.query("BEGIN")
 
-      // Obtener los detalles actuales para restaurar el stock
+      // Obtener el estado actual de la venta
+      const ventaResult = await client.query("SELECT estado FROM Ventas WHERE id = $1", [id])
+
+      if (ventaResult.rows.length === 0) {
+        throw new Error(`La venta con ID ${id} no existe`)
+      }
+
+      const estadoVenta = ventaResult.rows[0].estado
+
+      // Obtener los detalles actuales
       const detallesActualesResult = await client.query("SELECT * FROM DetalleVentas WHERE id_venta = $1", [id])
 
-      // Restaurar el stock de los productos actuales
-      for (const detalle of detallesActualesResult.rows) {
-        if (!detalle.es_combo) {
-          // Si es un producto normal, restaurar su stock directamente en la tabla Productos
-          await client.query("UPDATE Productos SET stock = stock + $1 WHERE id = $2", [
-            detalle.cantidad,
-            detalle.id_producto,
-          ])
-        } else {
-          // Si es un combo, obtener sus productos y restaurar el stock de cada uno
-          const comboDetallesResult = await client.query(
-            "SELECT id_producto, cantidad FROM DetalleCombos WHERE id_combo = $1",
-            [detalle.id_producto],
-          )
-
-          for (const comboDetalle of comboDetallesResult.rows) {
+      // Restaurar el stock de los productos actuales solo si la venta estaba en estado "Para embalar" o posterior
+      if (estadoVenta !== "Pendiente") {
+        for (const detalle of detallesActualesResult.rows) {
+          if (!detalle.es_combo) {
+            // Si es un producto normal, restaurar su stock directamente en la tabla Productos
             await client.query("UPDATE Productos SET stock = stock + $1 WHERE id = $2", [
-              comboDetalle.cantidad * detalle.cantidad,
-              comboDetalle.id_producto,
+              detalle.cantidad,
+              detalle.id_producto,
             ])
+          } else if (detalle.datos_combo_modificado) {
+            // Si es un combo modificado, restaurar el stock de cada producto según los datos modificados
+            try {
+              const items = JSON.parse(detalle.datos_combo_modificado)
+              for (const item of items) {
+                await client.query("UPDATE Productos SET stock = stock + $1 WHERE id = $2", [
+                  item.cantidad * detalle.cantidad,
+                  item.id_producto,
+                ])
+              }
+            } catch (error) {
+              console.error("Error al procesar datos de combo modificado:", error)
+              throw error
+            }
+          } else {
+            // Si es un combo normal, obtener sus productos y restaurar el stock de cada uno
+            const comboDetallesResult = await client.query(
+              "SELECT id_producto, cantidad FROM DetalleCombos WHERE id_combo = $1",
+              [detalle.id_producto],
+            )
+
+            for (const comboDetalle of comboDetallesResult.rows) {
+              await client.query("UPDATE Productos SET stock = stock + $1 WHERE id = $2", [
+                comboDetalle.cantidad * detalle.cantidad,
+                comboDetalle.id_producto,
+              ])
+            }
           }
         }
       }
@@ -697,18 +801,20 @@ export async function actualizarDetallesVenta(
               [id, detalle.id_producto, detalle.cantidad, detalle.precio, true, detalle.datos_combo_modificado],
             )
 
-            // Para combos modificados, actualizar el stock basado en los datos modificados
-            try {
-              const items = JSON.parse(detalle.datos_combo_modificado)
-              for (const item of items) {
-                await client.query("UPDATE Productos SET stock = stock - $1 WHERE id = $2", [
-                  item.cantidad,
-                  item.id_producto,
-                ])
+            // Para combos modificados, actualizar el stock basado en los datos modificados solo si la venta está en estado "Para embalar" o posterior
+            if (estadoVenta !== "Pendiente") {
+              try {
+                const items = JSON.parse(detalle.datos_combo_modificado)
+                for (const item of items) {
+                  await client.query("UPDATE Productos SET stock = stock - $1 WHERE id = $2", [
+                    item.cantidad * detalle.cantidad,
+                    item.id_producto,
+                  ])
+                }
+              } catch (error) {
+                console.error("Error al procesar datos de combo modificado:", error)
+                throw error
               }
-            } catch (error) {
-              console.error("Error al procesar datos de combo modificado:", error)
-              throw error
             }
           } else {
             // Si es un combo normal, insertar sin datos de modificación
@@ -717,17 +823,19 @@ export async function actualizarDetallesVenta(
               [id, detalle.id_producto, detalle.cantidad, detalle.precio, true],
             )
 
-            // Si es un combo normal, obtener sus productos y actualizar el stock de cada uno
-            const comboDetallesResult = await client.query(
-              "SELECT id_producto, cantidad FROM DetalleCombos WHERE id_combo = $1",
-              [detalle.id_producto],
-            )
+            // Si es un combo normal, obtener sus productos y actualizar el stock de cada uno solo si la venta está en estado "Para embalar" o posterior
+            if (estadoVenta !== "Pendiente") {
+              const comboDetallesResult = await client.query(
+                "SELECT id_producto, cantidad FROM DetalleCombos WHERE id_combo = $1",
+                [detalle.id_producto],
+              )
 
-            for (const comboDetalle of comboDetallesResult.rows) {
-              await client.query("UPDATE Productos SET stock = stock - $1 WHERE id = $2", [
-                comboDetalle.cantidad * detalle.cantidad,
-                comboDetalle.id_producto,
-              ])
+              for (const comboDetalle of comboDetallesResult.rows) {
+                await client.query("UPDATE Productos SET stock = stock - $1 WHERE id = $2", [
+                  comboDetalle.cantidad * detalle.cantidad,
+                  comboDetalle.id_producto,
+                ])
+              }
             }
           }
         } else {
@@ -743,11 +851,13 @@ export async function actualizarDetallesVenta(
             [id, detalle.id_producto, detalle.cantidad, detalle.precio, false],
           )
 
-          // Si es un producto normal, actualizar su stock directamente en la tabla Productos
-          await client.query("UPDATE Productos SET stock = stock - $1 WHERE id = $2", [
-            detalle.cantidad,
-            detalle.id_producto,
-          ])
+          // Si es un producto normal, actualizar su stock directamente en la tabla Productos solo si la venta está en estado "Para embalar" o posterior
+          if (estadoVenta !== "Pendiente") {
+            await client.query("UPDATE Productos SET stock = stock - $1 WHERE id = $2", [
+              detalle.cantidad,
+              detalle.id_producto,
+            ])
+          }
         }
       }
 
