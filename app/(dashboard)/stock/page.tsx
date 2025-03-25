@@ -31,6 +31,7 @@ export default function StockPage() {
   const { toast } = useToast()
   const [operacion, setOperacion] = useState<"sumar" | "restar">("sumar")
   const [codigo, setCodigo] = useState("")
+  const [cantidad, setCantidad] = useState<number>(1)
   const [historial, setHistorial] = useState<Producto[]>([])
   const [ultimoProducto, setUltimoProducto] = useState<Producto | null>(null)
   const [cargando, setCargando] = useState(false)
@@ -63,17 +64,26 @@ export default function StockPage() {
       return
     }
 
+    if (cantidad <= 0) {
+      toast({
+        title: "Error",
+        description: "La cantidad debe ser mayor a 0",
+        variant: "destructive",
+      })
+      return
+    }
+
     setCargando(true)
 
     try {
-      const cantidad = operacion === "sumar" ? 1 : -1
+      const cantidadFinal = operacion === "sumar" ? cantidad : -cantidad
 
       const response = await fetch("/api/productos/stock", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ codigo, cantidad }),
+        body: JSON.stringify({ codigo, cantidad: cantidadFinal }),
       })
 
       if (!response.ok) {
@@ -90,11 +100,12 @@ export default function StockPage() {
 
       // Limpiar el campo de código
       setCodigo("")
+      // No reiniciamos la cantidad para facilitar operaciones repetitivas con la misma cantidad
 
       // Mostrar notificación
       toast({
         title: "Stock actualizado",
-        description: `${productoActualizado.nombre}: ${operacion === "sumar" ? "+" : "-"}1 (Total: ${productoActualizado.stock})`,
+        description: `${productoActualizado.nombre}: ${operacion === "sumar" ? "+" : "-"}${cantidad} (Total: ${productoActualizado.stock})`,
       })
     } catch (error) {
       console.error("Error:", error)
@@ -153,6 +164,18 @@ export default function StockPage() {
                 </div>
 
                 <div className="space-y-2">
+                  <Label htmlFor="cantidad">Cantidad</Label>
+                  <Input
+                    id="cantidad"
+                    type="number"
+                    min="1"
+                    value={cantidad}
+                    onChange={(e) => setCantidad(Number.parseInt(e.target.value) || 1)}
+                    className="w-full"
+                  />
+                </div>
+
+                <div className="space-y-2">
                   <Label htmlFor="codigo">Código de Barras</Label>
                   <div className="flex space-x-2">
                     <Input
@@ -174,7 +197,7 @@ export default function StockPage() {
             <CardFooter className="flex justify-between">
               <div className="text-sm text-muted-foreground">Productos modificados: {totalModificados}</div>
               <Badge variant={operacion === "sumar" ? "default" : "destructive"}>
-                {operacion === "sumar" ? "Sumando" : "Restando"}
+                {operacion === "sumar" ? `Sumando ${cantidad}` : `Restando ${cantidad}`}
               </Badge>
             </CardFooter>
           </Card>
@@ -195,7 +218,7 @@ export default function StockPage() {
                       ) : (
                         <ArrowDown className="mr-1 h-3 w-3" />
                       )}
-                      {operacion === "sumar" ? "+1" : "-1"}
+                      {operacion === "sumar" ? `+${cantidad}` : `-${cantidad}`}
                     </Badge>
                   </div>
 
