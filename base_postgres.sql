@@ -195,3 +195,18 @@ ADD COLUMN comprobante_pago VARCHAR(100),
 ADD COLUMN requiere_factura BOOLEAN DEFAULT FALSE,
 ADD COLUMN numero_factura VARCHAR(50);
 ADD COLUMN numero_seguimiento VARCHAR(50);
+
+
+-- Agregar el campo id_proveedor a la tabla Productos
+ALTER TABLE Productos
+ADD COLUMN IF NOT EXISTS id_proveedor INTEGER;
+
+-- Establecer la relación de clave foránea con la tabla Proveedor
+ALTER TABLE Productos
+ADD CONSTRAINT fk_productos_proveedor
+FOREIGN KEY (id_proveedor) 
+REFERENCES Proveedor(id)
+ON DELETE SET NULL;
+
+-- Crear índice para mejorar el rendimiento en búsquedas por proveedor
+CREATE INDEX IF NOT EXISTS idx_productos_proveedor ON Productos(id_proveedor);

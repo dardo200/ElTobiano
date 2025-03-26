@@ -72,12 +72,13 @@ export default function ProductosPage() {
       )
     }
 
-    // Filtrar por código de proveedor
+    // Filtrar por código de proveedor o nombre de proveedor
     if (searchProveedorTerm.trim()) {
       filtered = filtered.filter(
         (producto) =>
-          producto.codigo_proveedor &&
-          producto.codigo_proveedor.toLowerCase().includes(searchProveedorTerm.toLowerCase()),
+          (producto.codigo_proveedor &&
+            producto.codigo_proveedor.toLowerCase().includes(searchProveedorTerm.toLowerCase())) ||
+          (producto.proveedor && producto.proveedor.nombre.toLowerCase().includes(searchProveedorTerm.toLowerCase())),
       )
     }
 
@@ -152,13 +153,13 @@ export default function ProductosPage() {
             </div>
             <div>
               <Label htmlFor="searchProveedor" className="mb-2 block">
-                Buscar por código de proveedor
+                Buscar por código o nombre de proveedor
               </Label>
               <div className="relative">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="searchProveedor"
-                  placeholder="Buscar por código de proveedor..."
+                  placeholder="Buscar por código o nombre de proveedor..."
                   value={searchProveedorTerm}
                   onChange={(e) => setSearchProveedorTerm(e.target.value)}
                   className="pl-8"

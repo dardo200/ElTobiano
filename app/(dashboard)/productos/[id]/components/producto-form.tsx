@@ -15,7 +15,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import type { Producto } from "@/types"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import type { Producto, Proveedor } from "@/types"
 import { toast } from "@/components/ui/use-toast"
 
 const formSchema = z.object({
@@ -27,6 +28,7 @@ const formSchema = z.object({
   codigo_proveedor: z.string().optional(),
   stock: z.coerce.number().int().min(0, "El stock debe ser mayor o igual a 0"),
   codigo: z.string().min(1, "El código de barras es requerido"),
+  id_proveedor: z.string().optional(),
 })
 
 type ProductoFormValues = z.infer<typeof formSchema>
@@ -42,20 +44,45 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({ initialData }) => {
   const [showBarcodeDialog, setShowBarcodeDialog] = useState(false)
   const [showPriceWarning, setShowPriceWarning] = useState(false)
   const [showMayoristaWarning, setShowMayoristaWarning] = useState(false)
+  const [proveedores, setProveedores] = useState<Proveedor[]>([])
   const barcodeCanvasRef = useRef<HTMLCanvasElement>(null)
 
-  const form = useForm<ProductoFormValues>({
+  useEffect(() => {
+    const fetchProveedores = async () => {
+      try {
+        const response = await fetch("/api/proveedores")
+        if (response.ok) {
+          const data = await response.json()
+          setProveedores(data)
+        } else {
+          console.error("Error al obtener proveedores")
+        }
+      } catch (error) {
+        console.error("Error al obtener proveedores:", error)
+      }
+    }
+
+    fetchProveedores()
+  }, [])
+
+  const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: initialData || {
-      nombre: "",
-      descripcion: "",
-      precio: 0,
-      precio_compra: 0,
-      precio_mayorista: 0,
-      codigo_proveedor: "",
-      stock: 0,
-      codigo: "",
-    },
+    defaultValues: initialData
+      ? {
+          ...initialData,
+          id_proveedor: initialData.id_proveedor ? String(initialData.id_proveedor) : undefined,
+        }
+      : {
+          nombre: "",
+          descripcion: "",
+          precio: 0,
+          precio_compra: 0,
+          precio_mayorista: 0,
+          codigo_proveedor: "",
+          stock: 0,
+          codigo: "",
+          id_proveedor: undefined,
+        },
   })
 
   // Observar cambios en los precios para mostrar advertencia
@@ -82,19 +109,24 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({ initialData }) => {
     }
   }, [precio, precio_compra, precio_mayorista])
 
-  const onSubmit = async (data: ProductoFormValues) => {
+  const onSubmit = async (data: z.infer<typeof formSchema>) => {
     setIsLoading(true)
     try {
       const url = initialData ? `/api/productos/${initialData.id}` : "/api/productos"
-
       const method = initialData ? "PATCH" : "POST"
+
+      // Convertir id_proveedor a número si existe
+      const formData = {
+        ...data,
+        id_proveedor: data.id_proveedor && data.id_proveedor !== "null" ? Number(data.id_proveedor) : null,
+      }
 
       const response = await fetch(url, {
         method,
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify(formData),
       })
 
       if (response.ok) {
@@ -401,6 +433,36 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({ initialData }) => {
                       value={field.value || ""}
                     />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="id_proveedor"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Proveedor</FormLabel>
+                  <Select
+                    disabled={isLoading}
+                    onValueChange={field.onChange}
+                    value={field.value}
+                    defaultValue={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar proveedor" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="null">Sin proveedor</SelectItem>
+                      {proveedores.map((proveedor) => (
+                        <SelectItem key={proveedor.id} value={proveedor.id.toString()}>
+                          {proveedor.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}

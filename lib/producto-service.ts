@@ -4,10 +4,22 @@ import type { Producto } from "@/types"
 export async function obtenerProductos(): Promise<Producto[]> {
   try {
     const result = await executeQuery(`
-      SELECT * FROM Productos
-      ORDER BY nombre
+      SELECT p.*, pr.nombre as proveedor_nombre 
+      FROM Productos p
+      LEFT JOIN Proveedor pr ON p.id_proveedor = pr.id
+      ORDER BY p.nombre
     `)
-    return result.rows
+
+    // Transformar los resultados para incluir el objeto proveedor
+    return result.rows.map((row) => ({
+      ...row,
+      proveedor: row.proveedor_nombre
+        ? {
+            id: row.id_proveedor,
+            nombre: row.proveedor_nombre,
+          }
+        : undefined,
+    }))
   } catch (error) {
     console.error("Error al obtener productos:", error)
     throw error
@@ -18,9 +30,11 @@ export async function obtenerProductoPorId(id: number): Promise<Producto | null>
   try {
     const result = await executeQuery(
       `
-      SELECT * FROM Productos
-      WHERE id = $1
-    `,
+      SELECT p.*, pr.nombre as proveedor_nombre 
+      FROM Productos p
+      LEFT JOIN Proveedor pr ON p.id_proveedor = pr.id
+      WHERE p.id = $1
+      `,
       [id],
     )
 
@@ -28,7 +42,16 @@ export async function obtenerProductoPorId(id: number): Promise<Producto | null>
       return null
     }
 
-    return result.rows[0]
+    const producto = result.rows[0]
+    return {
+      ...producto,
+      proveedor: producto.proveedor_nombre
+        ? {
+            id: producto.id_proveedor,
+            nombre: producto.proveedor_nombre,
+          }
+        : undefined,
+    }
   } catch (error) {
     console.error(`Error al obtener producto con id ${id}:`, error)
     throw error
@@ -59,7 +82,6 @@ export async function obtenerProductoPorCodigo(codigo: string): Promise<Producto
 export async function crearProducto(producto: Omit<Producto, "id">): Promise<Producto> {
   try {
     const client = await import("./db").then((module) => module.getClient())
-    
 
     try {
       await client.query("BEGIN")
@@ -84,8 +106,9 @@ export async function crearProducto(producto: Omit<Producto, "id">): Promise<Pro
           precio_compra, 
           precio_mayorista, 
           codigo_proveedor,
-          stock
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+          stock,
+          id_proveedor
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
         [
           producto.nombre,
           producto.descripcion,
@@ -95,10 +118,24 @@ export async function crearProducto(producto: Omit<Producto, "id">): Promise<Pro
           producto.precio_mayorista || 0,
           producto.codigo_proveedor || "",
           producto.stock || 0,
+          producto.id_proveedor || null,
         ],
       )
 
       const nuevoProducto = resultProducto.rows[0]
+
+      // Si hay un proveedor, obtener su nombre
+      if (nuevoProducto.id_proveedor) {
+        const proveedorResult = await client.query("SELECT nombre FROM Proveedor WHERE id = $1", [
+          nuevoProducto.id_proveedor,
+        ])
+        if (proveedorResult.rows.length > 0) {
+          nuevoProducto.proveedor = {
+            id: nuevoProducto.id_proveedor,
+            nombre: proveedorResult.rows[0].nombre,
+          }
+        }
+      }
 
       await client.query("COMMIT")
 
@@ -107,7 +144,7 @@ export async function crearProducto(producto: Omit<Producto, "id">): Promise<Pro
       await client.query("ROLLBACK")
       throw error
     } finally {
-      await client.end()
+      client.release()
     }
   } catch (error) {
     console.error("Error al crear producto:", error)
@@ -118,7 +155,6 @@ export async function crearProducto(producto: Omit<Producto, "id">): Promise<Pro
 export async function actualizarProducto(id: number, producto: Partial<Producto>): Promise<Producto | null> {
   try {
     const client = await import("./db").then((module) => module.getClient())
-    
 
     try {
       await client.query("BEGIN")
@@ -187,6 +223,12 @@ export async function actualizarProducto(id: number, producto: Partial<Producto>
         paramIndex++
       }
 
+      if (producto.id_proveedor !== undefined) {
+        updateFields.push(`id_proveedor = $${paramIndex}`)
+        updateValues.push(producto.id_proveedor)
+        paramIndex++
+      }
+
       if (updateFields.length === 0) {
         return null
       }
@@ -203,15 +245,29 @@ export async function actualizarProducto(id: number, producto: Partial<Producto>
         return null
       }
 
+      const productoActualizado = resultProducto.rows[0]
+
+      // Si hay un proveedor, obtener su nombre
+      if (productoActualizado.id_proveedor) {
+        const proveedorResult = await client.query("SELECT nombre FROM Proveedor WHERE id = $1", [
+          productoActualizado.id_proveedor,
+        ])
+        if (proveedorResult.rows.length > 0) {
+          productoActualizado.proveedor = {
+            id: productoActualizado.id_proveedor,
+            nombre: proveedorResult.rows[0].nombre,
+          }
+        }
+      }
+
       await client.query("COMMIT")
 
-      // Obtener el producto actualizado
-      return resultProducto.rows[0]
+      return productoActualizado
     } catch (error) {
       await client.query("ROLLBACK")
       throw error
     } finally {
-      await client.end()
+      client.release()
     }
   } catch (error) {
     console.error(`Error al actualizar producto con id ${id}:`, error)
@@ -259,21 +315,35 @@ export async function buscarProductos(termino: string): Promise<Producto[]> {
   try {
     const result = await executeQuery(
       `
-      SELECT * FROM Productos
-      WHERE nombre ILIKE $1 OR descripcion ILIKE $1 OR codigo = $2 OR codigo_proveedor = $2
-      ORDER BY nombre
-    `,
+      SELECT p.*, pr.nombre as proveedor_nombre 
+      FROM Productos p
+      LEFT JOIN Proveedor pr ON p.id_proveedor = pr.id
+      WHERE p.nombre ILIKE $1 
+        OR p.descripcion ILIKE $1 
+        OR p.codigo = $2 
+        OR p.codigo_proveedor = $2
+        OR pr.nombre ILIKE $1
+      ORDER BY p.nombre
+      `,
       [`%${termino}%`, termino],
     )
 
-    return result.rows
+    // Transformar los resultados para incluir el objeto proveedor
+    return result.rows.map((row) => ({
+      ...row,
+      proveedor: row.proveedor_nombre
+        ? {
+            id: row.id_proveedor,
+            nombre: row.proveedor_nombre,
+          }
+        : undefined,
+    }))
   } catch (error) {
     console.error(`Error al buscar productos con término "${termino}":`, error)
     throw error
   }
 }
 
-// Agregar esta función al final del archivo
 export async function contarProductosSinStock(): Promise<number> {
   try {
     const result = await executeQuery(
@@ -290,7 +360,6 @@ export async function contarProductosSinStock(): Promise<number> {
   }
 }
 
-// Modificar esta función para soportar los nuevos parámetros
 export async function obtenerProductosStockBajo(limite: number, exacto = false, minimo = 0): Promise<Producto[]> {
   try {
     let query = `
@@ -323,7 +392,6 @@ export async function obtenerProductosStockBajo(limite: number, exacto = false, 
   }
 }
 
-// Agregar esta función al archivo existente
 export async function verificarCodigoExiste(codigo: string): Promise<boolean> {
   try {
     const result = await executeQuery(

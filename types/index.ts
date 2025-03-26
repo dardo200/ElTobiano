@@ -5,6 +5,7 @@ export interface Usuario {
   rol: string
 }
 
+// En la interfaz Producto, agregar el campo id_proveedor
 export interface Producto {
   id: number
   nombre: string
@@ -15,6 +16,8 @@ export interface Producto {
   codigo_proveedor?: string
   stock?: number
   codigo?: string // Agregamos campo para código de barras
+  id_proveedor?: number // Nuevo campo para relacionar con la tabla Proveedor
+  proveedor?: Proveedor // Campo para almacenar los datos del proveedor relacionado
 }
 
 export interface Cliente {

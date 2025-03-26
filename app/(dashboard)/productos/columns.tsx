@@ -83,11 +83,11 @@ export const columns: ColumnDef<Producto>[] = [
     cell: ({ row }) => <div className="font-medium">{row.getValue("nombre")}</div>,
   },
   {
-    accessorKey: "descripcion",
-    header: () => <div className="text-left">Descripción</div>,
+    accessorKey: "proveedor",
+    header: () => <div className="text-left">Proveedor</div>,
     cell: ({ row }) => {
-      const descripcion = row.getValue("descripcion") as string
-      return <div className="truncate max-w-[300px]">{descripcion || "Sin descripción"}</div>
+      const proveedor = row.original.proveedor
+      return <div>{proveedor ? proveedor.nombre : "Sin proveedor"}</div>
     },
   },
   {
