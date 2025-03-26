@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server"
 import { verificarCodigoExiste } from "@/lib/producto-service"
 
-export async function GET(req: Request, { params }: { params: { codigo: Promise<string> | string } }) {
+export async function GET(request: Request, { params }: { params: { codigo: string } }) {
   try {
-    const codigoParam = await params.codigo
+    // En Next.js 15, extraemos el código directamente de la URL
+    const url = new URL(request.url)
+    const segments = url.pathname.split("/")
+    const codigoIndex = segments.findIndex((segment) => segment === "codigo") + 1
+    const codigoParam = segments[codigoIndex]
 
     if (!codigoParam) {
       return NextResponse.json({ error: "Código no proporcionado" }, { status: 400 })
