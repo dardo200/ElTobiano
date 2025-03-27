@@ -2,12 +2,12 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { Loader2, Plus, Trash, Barcode, Info } from "lucide-react"
+import { Loader2, Plus, Trash, Barcode, Info, Search, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -16,6 +16,7 @@ import { Separator } from "@/components/ui/separator"
 import { Card, CardContent } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { cn } from "@/lib/utils"
 import type { Producto, Proveedor } from "@/types"
 import { toast } from "@/components/ui/use-toast"
 
@@ -47,6 +48,9 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
   const [searchCode, setSearchCode] = useState("")
   const [selectedProveedor, setSelectedProveedor] = useState<Proveedor | null>(null)
+  const [productosDropdowns, setProductosDropdowns] = useState<{ [key: number]: boolean }>({})
+  const [searchTerms, setSearchTerms] = useState<{ [key: number]: string }>({})
+  const [filteredProductos, setFilteredProductos] = useState<{ [key: number]: Producto[] }>({})
 
   useEffect(() => {
     const fetchProveedores = async () => {
@@ -90,6 +94,23 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
 
   const watchDetalles = form.watch("detalles")
   const watchIdProveedor = form.watch("id_proveedor")
+
+  // Inicializar los estados para cada detalle
+  useEffect(() => {
+    const newDropdowns: { [key: number]: boolean } = {}
+    const newSearchTerms: { [key: number]: string } = {}
+    const newFilteredProductos: { [key: number]: Producto[] } = {}
+
+    fields.forEach((field, index) => {
+      newDropdowns[index] = newDropdowns[index] || false
+      newSearchTerms[index] = newSearchTerms[index] || ""
+      newFilteredProductos[index] = productos
+    })
+
+    setProductosDropdowns(newDropdowns)
+    setSearchTerms(newSearchTerms)
+    setFilteredProductos(newFilteredProductos)
+  }, [fields.length, productos])
 
   // Actualizar el proveedor seleccionado cuando cambia el id_proveedor
   useEffect(() => {
@@ -136,7 +157,10 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
   const handleProductoChange = (index: number, id_producto: string) => {
     const producto = productos.find((p) => p.id.toString() === id_producto)
     if (producto) {
+      form.setValue(`detalles.${index}.id_producto`, id_producto)
       form.setValue(`detalles.${index}.precio`, producto.precio_compra || producto.precio)
+      // Cerrar el dropdown después de seleccionar
+      toggleProductoDropdown(index, false)
     }
   }
 
@@ -244,6 +268,52 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
     return isNaN(num) ? "0.00" : num.toFixed(2)
   }
 
+  // Funciones para manejar el dropdown personalizado
+  const toggleProductoDropdown = (index: number, value?: boolean) => {
+    setProductosDropdowns((prev) => ({
+      ...prev,
+      [index]: value !== undefined ? value : !prev[index],
+    }))
+  }
+
+  const handleSearchChange = (index: number, value: string) => {
+    setSearchTerms((prev) => ({
+      ...prev,
+      [index]: value,
+    }))
+
+    // Filtrar productos basados en el término de búsqueda
+    const filtered = productos.filter(
+      (producto) =>
+        producto.nombre.toLowerCase().includes(value.toLowerCase()) ||
+        (producto.codigo && producto.codigo.toLowerCase().includes(value.toLowerCase())),
+    )
+
+    setFilteredProductos((prev) => ({
+      ...prev,
+      [index]: filtered,
+    }))
+  }
+
+  // Cerrar el dropdown cuando se hace clic fuera
+  const dropdownRefs = useRef<{ [key: number]: HTMLDivElement | null }>({})
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      Object.entries(dropdownRefs.current).forEach(([indexStr, ref]) => {
+        const index = Number.parseInt(indexStr)
+        if (ref && !ref.contains(event.target as Node) && productosDropdowns[index]) {
+          toggleProductoDropdown(index, false)
+        }
+      })
+    }
+
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [productosDropdowns])
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 w-full">
@@ -324,28 +394,63 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
                       <FormItem className="md:col-span-2">
                         <FormLabel>Producto</FormLabel>
                         <div className="flex gap-2">
-                          <Select
-                            disabled={isLoading}
-                            onValueChange={(value) => {
-                              field.onChange(value)
-                              handleProductoChange(index, value)
-                            }}
-                            value={field.value}
-                            defaultValue={field.value}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Seleccionar producto" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {productos.map((producto) => (
-                                <SelectItem key={producto.id} value={producto.id.toString()}>
-                                  {producto.nombre}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <div className="relative w-full" ref={(el) => (dropdownRefs.current[index] = el)}>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="w-full justify-between"
+                              onClick={() => toggleProductoDropdown(index)}
+                            >
+                              {field.value
+                                ? productos.find((producto) => producto.id.toString() === field.value)?.nombre
+                                : "Seleccionar producto"}
+                            </Button>
+
+                            {productosDropdowns[index] && (
+                              <div className="absolute z-10 w-full mt-1 bg-background border rounded-md shadow-lg">
+                                <div className="p-2 border-b flex items-center">
+                                  <Search className="h-4 w-4 mr-2 text-muted-foreground" />
+                                  <Input
+                                    placeholder="Buscar producto..."
+                                    value={searchTerms[index] || ""}
+                                    onChange={(e) => handleSearchChange(index, e.target.value)}
+                                    className="border-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                                    autoFocus
+                                  />
+                                  {searchTerms[index] && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleSearchChange(index, "")}
+                                      className="h-6 w-6"
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                                <div className="max-h-[200px] overflow-y-auto">
+                                  {filteredProductos[index]?.length === 0 ? (
+                                    <div className="p-2 text-center text-muted-foreground">
+                                      No se encontraron productos
+                                    </div>
+                                  ) : (
+                                    filteredProductos[index]?.map((producto) => (
+                                      <div
+                                        key={producto.id}
+                                        className={cn(
+                                          "px-2 py-1.5 cursor-pointer hover:bg-accent hover:text-accent-foreground",
+                                          producto.id.toString() === field.value && "bg-accent text-accent-foreground",
+                                        )}
+                                        onClick={() => handleProductoChange(index, producto.id.toString())}
+                                      >
+                                        {producto.nombre}
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                           <Button type="button" variant="outline" size="icon" onClick={() => handleScanBarcode(index)}>
                             <Barcode className="h-4 w-4" />
                           </Button>
