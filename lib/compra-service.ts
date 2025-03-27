@@ -24,7 +24,6 @@ export async function obtenerCompras(): Promise<Compra[]> {
 export async function obtenerCompraPorId(id: number): Promise<Compra | null> {
   try {
     const client = await import("./db").then((module) => module.getClient())
-    
 
     try {
       // Obtener la compra
@@ -80,7 +79,7 @@ export async function obtenerCompraPorId(id: number): Promise<Compra | null> {
         detalles,
       }
     } finally {
-      await client.end()
+      client.release()
     }
   } catch (error) {
     console.error(`Error al obtener compra con id ${id}:`, error)
@@ -101,7 +100,6 @@ export async function crearCompra(
 ): Promise<Compra> {
   try {
     const client = await import("./db").then((module) => module.getClient())
-    
 
     try {
       await client.query("BEGIN")
@@ -158,7 +156,7 @@ export async function crearCompra(
       await client.query("ROLLBACK")
       throw error
     } finally {
-      await client.end()
+      client.release()
     }
   } catch (error) {
     console.error("Error al crear compra:", error)
@@ -166,13 +164,46 @@ export async function crearCompra(
   }
 }
 
-export async function actualizarCompra(id: number, compra: Partial<Compra>): Promise<Compra | null> {
+export async function actualizarCompra(
+  id: number,
+  compra: Partial<Compra>,
+  detallesActualizados?: {
+    existentes: {
+      id: number
+      cantidad: number
+      precio: number
+      iva_porcentaje: number
+      precio_con_iva: number
+    }[]
+    nuevos: {
+      id_producto: number
+      cantidad: number
+      precio: number
+      iva_porcentaje: number
+      precio_con_iva: number
+      actualizar_precio_compra?: boolean
+    }[]
+    eliminados: number[]
+  },
+): Promise<Compra | null> {
   try {
     const client = await import("./db").then((module) => module.getClient())
-    
 
     try {
       await client.query("BEGIN")
+
+      console.log(
+        `Actualizando compra ID: ${id} con detalles:`,
+        detallesActualizados ? JSON.stringify(detallesActualizados) : "Sin detalles",
+      )
+
+      // Obtener la compra original para calcular diferencias de stock
+      const compraOriginal = await obtenerCompraPorId(id)
+      if (!compraOriginal) {
+        console.log(`No se encontró la compra con ID: ${id}`)
+        await client.query("ROLLBACK")
+        return null
+      }
 
       // Actualizar la compra
       const updateFields = []
@@ -203,31 +234,129 @@ export async function actualizarCompra(id: number, compra: Partial<Compra>): Pro
         paramIndex++
       }
 
-      if (updateFields.length === 0) {
-        return null
+      if (updateFields.length > 0) {
+        updateValues.push(id)
+        const updateQuery = `UPDATE Compras SET ${updateFields.join(", ")} WHERE id = $${paramIndex} RETURNING *`
+        console.log(`Ejecutando query de actualización: ${updateQuery} con valores:`, updateValues)
+        await client.query(updateQuery, updateValues)
       }
 
-      updateValues.push(id)
+      // Si hay detalles actualizados, procesarlos
+      if (detallesActualizados) {
+        console.log("Procesando detalles actualizados...")
 
-      const result = await client.query(
-        `UPDATE Compras SET ${updateFields.join(", ")} WHERE id = $${paramIndex} RETURNING *`,
-        updateValues,
-      )
+        // 1. Procesar detalles eliminados
+        if (detallesActualizados.eliminados && detallesActualizados.eliminados.length > 0) {
+          console.log(`Procesando ${detallesActualizados.eliminados.length} detalles eliminados`)
+          for (const detalleId of detallesActualizados.eliminados) {
+            // Encontrar el detalle original para ajustar el stock
+            const detalleOriginal = compraOriginal.detalles?.find((d) => d.id === detalleId)
+            if (detalleOriginal) {
+              console.log(
+                `Eliminando detalle ID: ${detalleId}, ajustando stock de producto ID: ${detalleOriginal.id_producto} en -${detalleOriginal.cantidad}`,
+              )
+              // Reducir el stock ya que estamos eliminando un producto de la compra
+              await client.query("UPDATE Productos SET stock = stock - $1 WHERE id = $2", [
+                detalleOriginal.cantidad,
+                detalleOriginal.id_producto,
+              ])
+            }
+            // Eliminar el detalle
+            await client.query("DELETE FROM DetalleCompras WHERE id = $1", [detalleId])
+          }
+        }
 
-      if (result.rows.length === 0) {
-        await client.query("ROLLBACK")
-        return null
+        // 2. Procesar detalles existentes (modificados)
+        if (detallesActualizados.existentes && detallesActualizados.existentes.length > 0) {
+          console.log(`Procesando ${detallesActualizados.existentes.length} detalles existentes`)
+          for (const detalle of detallesActualizados.existentes) {
+            // Encontrar el detalle original para calcular la diferencia de stock
+            const detalleOriginal = compraOriginal.detalles?.find((d) => d.id === detalle.id)
+            if (detalleOriginal) {
+              const diferenciaCantidad = detalle.cantidad - detalleOriginal.cantidad
+              console.log(`Actualizando detalle ID: ${detalle.id}, diferencia de cantidad: ${diferenciaCantidad}`)
+
+              // Actualizar el detalle
+              await client.query(
+                "UPDATE DetalleCompras SET cantidad = $1, precio = $2, iva_porcentaje = $3, precio_con_iva = $4 WHERE id = $5",
+                [detalle.cantidad, detalle.precio, detalle.iva_porcentaje, detalle.precio_con_iva, detalle.id],
+              )
+
+              // Ajustar el stock si la cantidad cambió
+              if (diferenciaCantidad !== 0) {
+                console.log(`Ajustando stock de producto ID: ${detalleOriginal.id_producto} en ${diferenciaCantidad}`)
+                await client.query("UPDATE Productos SET stock = stock + $1 WHERE id = $2", [
+                  diferenciaCantidad,
+                  detalleOriginal.id_producto,
+                ])
+              }
+            }
+          }
+        }
+
+        // 3. Procesar nuevos detalles
+        if (detallesActualizados.nuevos && detallesActualizados.nuevos.length > 0) {
+          console.log(`Procesando ${detallesActualizados.nuevos.length} detalles nuevos`)
+          for (const detalle of detallesActualizados.nuevos) {
+            console.log(
+              `Agregando nuevo detalle para producto ID: ${detalle.id_producto}, cantidad: ${detalle.cantidad}`,
+            )
+            // Insertar el nuevo detalle
+            await client.query(
+              "INSERT INTO DetalleCompras (id_compra, id_producto, cantidad, precio, iva_porcentaje, precio_con_iva) VALUES ($1, $2, $3, $4, $5, $6)",
+              [
+                id,
+                detalle.id_producto,
+                detalle.cantidad,
+                detalle.precio,
+                detalle.iva_porcentaje,
+                detalle.precio_con_iva,
+              ],
+            )
+
+            // Aumentar el stock
+            await client.query("UPDATE Productos SET stock = stock + $1 WHERE id = $2", [
+              detalle.cantidad,
+              detalle.id_producto,
+            ])
+
+            // Actualizar el precio de compra si se solicita
+            if (detalle.actualizar_precio_compra) {
+              await client.query("UPDATE Productos SET precio_compra = $1 WHERE id = $2", [
+                detalle.precio_con_iva,
+                detalle.id_producto,
+              ])
+            }
+          }
+        }
+
+        // 4. Recalcular el total de la compra
+        const totalResult = await client.query(
+          `SELECT SUM(cantidad * precio_con_iva) as total FROM DetalleCompras WHERE id_compra = $1`,
+          [id],
+        )
+
+        const nuevoTotal = Number.parseFloat(totalResult.rows[0].total) || 0
+        const costoEnvio = compra.costo_envio !== undefined ? compra.costo_envio : compraOriginal.costo_envio || 0
+        const totalFinal = nuevoTotal + costoEnvio
+
+        console.log(`Recalculando total: subtotal=${nuevoTotal}, costoEnvio=${costoEnvio}, totalFinal=${totalFinal}`)
+
+        // Actualizar el total en la tabla Compras
+        await client.query("UPDATE Compras SET total = $1 WHERE id = $2", [totalFinal, id])
       }
 
       await client.query("COMMIT")
+      console.log(`Transacción completada exitosamente para compra ID: ${id}`)
 
       // Obtener la compra actualizada con sus detalles
       return await obtenerCompraPorId(id)
     } catch (error) {
+      console.error(`Error durante la actualización de la compra ID: ${id}:`, error)
       await client.query("ROLLBACK")
       throw error
     } finally {
-      await client.end()
+      client.release()
     }
   } catch (error) {
     console.error(`Error al actualizar compra con id ${id}:`, error)
@@ -238,7 +367,6 @@ export async function actualizarCompra(id: number, compra: Partial<Compra>): Pro
 export async function eliminarCompra(id: number): Promise<boolean> {
   try {
     const client = await import("./db").then((module) => module.getClient())
-    
 
     try {
       await client.query("BEGIN")
@@ -268,7 +396,7 @@ export async function eliminarCompra(id: number): Promise<boolean> {
       await client.query("ROLLBACK")
       throw error
     } finally {
-      await client.end()
+      client.release()
     }
   } catch (error) {
     console.error(`Error al eliminar compra con id ${id}:`, error)

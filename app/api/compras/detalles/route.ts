@@ -44,14 +44,23 @@ export async function PATCH(req: NextRequest) {
     console.log(`Actualizando compra con ID: ${compraId}`)
 
     const body = await req.json()
+    console.log("Datos recibidos para actualización:", JSON.stringify(body, null, 2))
 
-    const compra = await actualizarCompra(compraId, body)
+    const { detallesActualizados, ...compraData } = body
+
+    // Verificar si hay detalles actualizados
+    if (detallesActualizados) {
+      console.log("Detalles a actualizar:", JSON.stringify(detallesActualizados, null, 2))
+    }
+
+    const compra = await actualizarCompra(compraId, compraData, detallesActualizados)
 
     if (!compra) {
       console.error(`Compra con ID ${compraId} no encontrada`)
       return NextResponse.json({ error: "Compra no encontrada" }, { status: 404 })
     }
 
+    console.log("Compra actualizada correctamente")
     return NextResponse.json(compra)
   } catch (error) {
     console.error(`Error al actualizar compra:`, error)
