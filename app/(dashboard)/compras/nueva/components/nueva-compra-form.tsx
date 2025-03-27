@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation"
 import { useForm, useFieldArray } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { Loader2, Plus, Trash, Barcode, Info, Search, X } from "lucide-react"
+import { Loader2, Plus, Trash, Barcode, Info, Search, X, Filter } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -16,6 +16,7 @@ import { Separator } from "@/components/ui/separator"
 import { Card, CardContent } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import type { Producto, Proveedor } from "@/types"
 import { toast } from "@/components/ui/use-toast"
@@ -51,6 +52,8 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
   const [productosDropdowns, setProductosDropdowns] = useState<{ [key: number]: boolean }>({})
   const [searchTerms, setSearchTerms] = useState<{ [key: number]: string }>({})
   const [filteredProductos, setFilteredProductos] = useState<{ [key: number]: Producto[] }>({})
+  const [filterByProveedor, setFilterByProveedor] = useState(false)
+  const [allProductos, setAllProductos] = useState<Producto[]>(productos)
 
   useEffect(() => {
     const fetchProveedores = async () => {
@@ -104,13 +107,13 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
     fields.forEach((field, index) => {
       newDropdowns[index] = newDropdowns[index] || false
       newSearchTerms[index] = newSearchTerms[index] || ""
-      newFilteredProductos[index] = productos
+      newFilteredProductos[index] = getFilteredProductos("", watchIdProveedor)
     })
 
     setProductosDropdowns(newDropdowns)
     setSearchTerms(newSearchTerms)
     setFilteredProductos(newFilteredProductos)
-  }, [fields.length, productos])
+  }, [fields.length, watchIdProveedor, filterByProveedor])
 
   // Actualizar el proveedor seleccionado cuando cambia el id_proveedor
   useEffect(() => {
@@ -122,10 +125,41 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
       if (proveedor && proveedor.envio !== undefined) {
         form.setValue("costo_envio", proveedor.envio)
       }
+
+      // Actualizar los productos filtrados para cada detalle
+      const newFilteredProductos: { [key: number]: Producto[] } = {}
+      fields.forEach((field, index) => {
+        newFilteredProductos[index] = getFilteredProductos(searchTerms[index] || "", watchIdProveedor)
+      })
+      setFilteredProductos(newFilteredProductos)
     } else {
       setSelectedProveedor(null)
+      setFilterByProveedor(false)
     }
-  }, [watchIdProveedor, proveedores, form])
+  }, [watchIdProveedor, proveedores, form, fields.length, searchTerms, filterByProveedor])
+
+  // Función para obtener productos filtrados basados en término de búsqueda y proveedor
+  const getFilteredProductos = (searchTerm: string, idProveedor: string): Producto[] => {
+    let filtered = [...productos]
+
+    // Filtrar por proveedor si está activado el filtro y hay un proveedor seleccionado
+    if (filterByProveedor && idProveedor) {
+      filtered = filtered.filter(
+        (producto) => producto.id_proveedor && producto.id_proveedor.toString() === idProveedor,
+      )
+    }
+
+    // Filtrar por término de búsqueda
+    if (searchTerm) {
+      filtered = filtered.filter(
+        (producto) =>
+          producto.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (producto.codigo && producto.codigo.toLowerCase().includes(searchTerm.toLowerCase())),
+      )
+    }
+
+    return filtered
+  }
 
   // Calcular el precio con IVA para cada detalle
   const calcularPrecioConIVA = (precio: number, ivaPorcentaje: number): number => {
@@ -282,17 +316,25 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
       [index]: value,
     }))
 
-    // Filtrar productos basados en el término de búsqueda
-    const filtered = productos.filter(
-      (producto) =>
-        producto.nombre.toLowerCase().includes(value.toLowerCase()) ||
-        (producto.codigo && producto.codigo.toLowerCase().includes(value.toLowerCase())),
-    )
+    // Filtrar productos basados en el término de búsqueda y proveedor
+    const filtered = getFilteredProductos(value, watchIdProveedor)
 
     setFilteredProductos((prev) => ({
       ...prev,
       [index]: filtered,
     }))
+  }
+
+  // Manejar cambio en el filtro por proveedor
+  const handleFilterByProveedorChange = (checked: boolean) => {
+    setFilterByProveedor(checked)
+
+    // Actualizar los productos filtrados para cada detalle
+    const newFilteredProductos: { [key: number]: Producto[] } = {}
+    fields.forEach((field, index) => {
+      newFilteredProductos[index] = getFilteredProductos(searchTerms[index] || "", watchIdProveedor)
+    })
+    setFilteredProductos(newFilteredProductos)
   }
 
   // Cerrar el dropdown cuando se hace clic fuera
@@ -368,6 +410,23 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
           />
         </div>
 
+        {selectedProveedor && (
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="filter-by-proveedor"
+              checked={filterByProveedor}
+              onCheckedChange={handleFilterByProveedorChange}
+            />
+            <label
+              htmlFor="filter-by-proveedor"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center"
+            >
+              <Filter className="h-4 w-4 mr-1" />
+              Mostrar solo productos de {selectedProveedor.nombre}
+            </label>
+          </div>
+        )}
+
         <div className="flex items-center gap-2 mb-4">
           <Input
             placeholder="Escanear código de barras"
@@ -432,6 +491,11 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
                                   {filteredProductos[index]?.length === 0 ? (
                                     <div className="p-2 text-center text-muted-foreground">
                                       No se encontraron productos
+                                      {filterByProveedor && (
+                                        <div className="mt-1 text-xs">
+                                          Desactive el filtro por proveedor para ver todos los productos
+                                        </div>
+                                      )}
                                     </div>
                                   ) : (
                                     filteredProductos[index]?.map((producto) => (
