@@ -114,23 +114,23 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
   const calcularTotal = () => {
     // Sumar el precio base * cantidad de cada producto
     const subtotal = watchDetalles.reduce((total, detalle) => {
-      const precio = detalle.precio || 0
-      const cantidad = detalle.cantidad || 0
+      const precio = Number(detalle.precio || 0)
+      const cantidad = Number(detalle.cantidad || 0)
       return total + precio * cantidad
     }, 0)
 
     // Sumar el IVA de cada producto
     const totalIVA = watchDetalles.reduce((total, detalle) => {
-      const precio = detalle.precio || 0
-      const cantidad = detalle.cantidad || 0
-      const ivaPorcentaje = detalle.iva_porcentaje || 0
+      const precio = Number(detalle.precio || 0)
+      const cantidad = Number(detalle.cantidad || 0)
+      const ivaPorcentaje = Number(detalle.iva_porcentaje || 0)
       return total + precio * (ivaPorcentaje / 100) * cantidad
     }, 0)
 
     // Sumar el costo de envío
-    const costoEnvio = form.watch("costo_envio") || 0
+    const costoEnvio = Number(form.watch("costo_envio") || 0)
 
-    return subtotal + totalIVA + costoEnvio
+    return Number(subtotal + totalIVA + costoEnvio)
   }
 
   const handleProductoChange = (index: number, id_producto: string) => {
@@ -236,6 +236,12 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
     } finally {
       setIsLoading(false)
     }
+  }
+
+  // Función segura para formatear números
+  const formatNumber = (value: any): string => {
+    const num = Number(value)
+    return isNaN(num) ? "0.00" : num.toFixed(2)
   }
 
   return (
@@ -450,22 +456,26 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
                 <div className="mt-2 text-sm text-muted-foreground">
                   <p>
                     Precio con IVA: $
-                    {calcularPrecioConIVA(
-                      watchDetalles[index]?.precio || 0,
-                      watchDetalles[index]?.iva_porcentaje || 0,
-                    ).toFixed(2)}
+                    {formatNumber(
+                      calcularPrecioConIVA(
+                        Number(watchDetalles[index]?.precio || 0),
+                        Number(watchDetalles[index]?.iva_porcentaje || 0),
+                      ),
+                    )}
                   </p>
                   <p>
                     Subtotal: $
-                    {((watchDetalles[index]?.precio || 0) * (watchDetalles[index]?.cantidad || 0)).toFixed(2)}
+                    {formatNumber(
+                      Number(watchDetalles[index]?.precio || 0) * Number(watchDetalles[index]?.cantidad || 0),
+                    )}
                   </p>
                   <p>
                     IVA: $
-                    {(
-                      (watchDetalles[index]?.precio || 0) *
-                      (watchDetalles[index]?.cantidad || 0) *
-                      ((watchDetalles[index]?.iva_porcentaje || 0) / 100)
-                    ).toFixed(2)}
+                    {formatNumber(
+                      Number(watchDetalles[index]?.precio || 0) *
+                        Number(watchDetalles[index]?.cantidad || 0) *
+                        (Number(watchDetalles[index]?.iva_porcentaje || 0) / 100),
+                    )}
                   </p>
                 </div>
               </CardContent>
@@ -497,33 +507,36 @@ export const NuevaCompraForm: React.FC<NuevaCompraFormProps> = ({ productos }) =
               <span>Subtotal:</span>
               <span>
                 $
-                {watchDetalles
-                  .reduce((total, detalle) => total + (detalle.precio || 0) * (detalle.cantidad || 0), 0)
-                  .toFixed(2)}
+                {formatNumber(
+                  watchDetalles.reduce(
+                    (total, detalle) => total + Number(detalle.precio || 0) * Number(detalle.cantidad || 0),
+                    0,
+                  ),
+                )}
               </span>
             </div>
             <div className="flex justify-between">
               <span>IVA:</span>
               <span>
                 $
-                {watchDetalles
-                  .reduce((total, detalle) => {
-                    const precio = detalle.precio || 0
-                    const cantidad = detalle.cantidad || 0
-                    const ivaPorcentaje = detalle.iva_porcentaje || 0
+                {formatNumber(
+                  watchDetalles.reduce((total, detalle) => {
+                    const precio = Number(detalle.precio || 0)
+                    const cantidad = Number(detalle.cantidad || 0)
+                    const ivaPorcentaje = Number(detalle.iva_porcentaje || 0)
                     return total + precio * (ivaPorcentaje / 100) * cantidad
-                  }, 0)
-                  .toFixed(2)}
+                  }, 0),
+                )}
               </span>
             </div>
             <div className="flex justify-between">
               <span>Costo de Envío:</span>
-              <span>${(form.watch("costo_envio") || 0).toFixed(2)}</span>
+              <span>${formatNumber(form.watch("costo_envio"))}</span>
             </div>
             <Separator />
             <div className="flex justify-between text-lg font-bold">
               <span>Total:</span>
-              <span>${calcularTotal().toFixed(2)}</span>
+              <span>${formatNumber(calcularTotal())}</span>
             </div>
           </div>
         </div>
