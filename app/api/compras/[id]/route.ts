@@ -39,11 +39,22 @@ export async function PATCH(req: Request, { params }: { params: { id: Promise<st
   }
 }
 
-export async function DELETE(req: Request, { params }: { params: { id: Promise<string> | string } }) {
+export async function DELETE(req: Request) {
   try {
-    // Await the params.id if it's a Promise
-    const idParam = await params.id
-    const id = Number.parseInt(idParam)
+    // Extraer el ID directamente de la URL
+    const url = req.url
+    const idMatch = url.match(/\/api\/compras\/(\d+)$/)
+
+    if (!idMatch || !idMatch[1]) {
+      return NextResponse.json({ error: "ID de compra no válido" }, { status: 400 })
+    }
+
+    const id = Number.parseInt(idMatch[1])
+
+    if (isNaN(id)) {
+      return NextResponse.json({ error: "ID de compra no válido" }, { status: 400 })
+    }
+
     const success = await eliminarCompra(id)
 
     if (!success) {

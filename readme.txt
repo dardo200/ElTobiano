@@ -178,3 +178,8 @@ Invoke-WebRequest -Uri https://aka.ms/TunnelsCliDownload/win-x64 -OutFile devtun
 .\devtunnel.exe -h
 devtunnel user login
 devtunnel echo http -p 3000 -a
+
+
+
+error param:
+necesito que en la funcion eliminar compra en lugar de acceder a params.id (que parece ser la fuente del error), extrae el ID directamente de la URL de la solicitud.
