@@ -210,3 +210,6 @@ ON DELETE SET NULL;
 
 -- Crear índice para mejorar el rendimiento en búsquedas por proveedor
 CREATE INDEX IF NOT EXISTS idx_productos_proveedor ON Productos(id_proveedor);
+
+-- Agregar columna para indicar si el pago del envío es en origen o destino
+ALTER TABLE Ventas ADD COLUMN pago_en_destino BOOLEAN DEFAULT FALSE;

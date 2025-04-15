@@ -52,6 +52,7 @@ export interface Venta {
   requiere_factura?: boolean
   numero_factura?: string
   numero_seguimiento?: string
+  pago_en_destino?: boolean // Nuevo campo para indicar si el pago del envío es en destino
 }
 
 export interface DetalleVenta {
@@ -148,4 +149,3 @@ export interface Proveedor {
   direccion?: string
   envio?: number
 }
-

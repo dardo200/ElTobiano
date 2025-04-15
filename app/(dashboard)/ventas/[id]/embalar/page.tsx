@@ -35,6 +35,10 @@ export default function EmbalarVentaPage() {
   const [requiereFactura, setRequiereFactura] = useState<boolean>(false)
   const [numeroFactura, setNumeroFactura] = useState<string>("")
 
+  // Añadir un nuevo estado para el pago en destino
+  const [pagoEnDestino, setPagoEnDestino] = useState<boolean>(false)
+
+  // Modificar el useEffect para cargar el valor de pago_en_destino si existe
   useEffect(() => {
     const fetchVenta = async () => {
       try {
@@ -63,6 +67,7 @@ export default function EmbalarVentaPage() {
           if (data.comprobante_pago) setComprobantePago(data.comprobante_pago)
           if (data.requiere_factura !== undefined) setRequiereFactura(data.requiere_factura)
           if (data.numero_factura) setNumeroFactura(data.numero_factura)
+          if (data.pago_en_destino !== undefined) setPagoEnDestino(data.pago_en_destino)
 
           // Si la venta no está en estado "Pendiente", redirigir
           if (data.estado !== "Pendiente") {
@@ -88,7 +93,7 @@ export default function EmbalarVentaPage() {
     fetchVenta()
   }, [params.id, router, toast])
 
-  // Modificar la función handleSubmit para mostrar un mensaje de error más claro
+  // Modificar la función handleSubmit para incluir el nuevo campo
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -115,6 +120,7 @@ export default function EmbalarVentaPage() {
           comprobante_pago: comprobantePago,
           requiere_factura: requiereFactura,
           numero_factura: numeroFactura,
+          pago_en_destino: pagoEnDestino, // Añadir el nuevo campo
         }),
       })
 
@@ -285,6 +291,21 @@ export default function EmbalarVentaPage() {
                 </div>
               )}
             </div>
+            <div className="space-y-2 mt-4">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="pagoEnDestino"
+                  checked={pagoEnDestino}
+                  onCheckedChange={(checked) => setPagoEnDestino(checked as boolean)}
+                />
+                <Label htmlFor="pagoEnDestino">Pago del envío en destino</Label>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {pagoEnDestino
+                  ? "El cliente pagará el envío al recibir el paquete"
+                  : "El envío se paga en origen (nosotros pagamos)"}
+              </p>
+            </div>
           </CardContent>
         </Card>
 
@@ -370,4 +391,3 @@ export default function EmbalarVentaPage() {
     </>
   )
 }
-

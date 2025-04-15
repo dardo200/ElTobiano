@@ -22,7 +22,7 @@ export async function obtenerVentas(): Promise<Venta[]> {
   }
 }
 
-// Actualizar la función obtenerVentaPorId para incluir los nuevos campos
+// Actualizar la función obtenerVentaPorId para incluir el nuevo campo
 export async function obtenerVentaPorId(id: number): Promise<Venta | null> {
   try {
     const client = await import("./db").then((module) => module.getClient())
@@ -31,7 +31,7 @@ export async function obtenerVentaPorId(id: number): Promise<Venta | null> {
       // Obtener la venta
       const ventaResult = await client.query(
         `
-        SELECT v.*, c.nombre as cliente_nombre, c.email, c.telefono, c.direccion, v.medio_comunicacion, v.dato_comunicacion, v.correo_usado, v.pago_envio, v.cuenta_transferencia, v.comprobante_pago, v.requiere_factura, v.numero_factura, v.numero_seguimiento
+        SELECT v.*, c.nombre as cliente_nombre, c.email, c.telefono, c.direccion, v.medio_comunicacion, v.dato_comunicacion, v.correo_usado, v.pago_envio, v.cuenta_transferencia, v.comprobante_pago, v.requiere_factura, v.numero_factura, v.numero_seguimiento, v.pago_en_destino
         FROM Ventas v
         LEFT JOIN Clientes c ON v.id_cliente = c.id
         WHERE v.id = $1
@@ -108,6 +108,7 @@ export async function obtenerVentaPorId(id: number): Promise<Venta | null> {
         requiere_factura: venta.requiere_factura,
         numero_factura: venta.numero_factura,
         numero_seguimiento: venta.numero_seguimiento,
+        pago_en_destino: venta.pago_en_destino,
       }
     } finally {
       client.release()
@@ -118,7 +119,7 @@ export async function obtenerVentaPorId(id: number): Promise<Venta | null> {
   }
 }
 
-// Modificar la función crearVenta para que no descuente stock al crear la venta
+// Actualizar la función crearVenta para incluir el nuevo campo
 export async function crearVenta(
   venta: Omit<Venta, "id">,
   detalles: Array<
@@ -230,7 +231,7 @@ export async function crearVenta(
 
       // En la parte donde se inserta la venta, establecer el estado como "Pendiente"
       const ventaResult = await client.query(
-        "INSERT INTO Ventas (id_cliente, fecha, total, cerrado, estado, medio_comunicacion, dato_comunicacion, correo_usado, pago_envio, cuenta_transferencia, comprobante_pago, requiere_factura, numero_factura, numero_seguimiento) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *",
+        "INSERT INTO Ventas (id_cliente, fecha, total, cerrado, estado, medio_comunicacion, dato_comunicacion, correo_usado, pago_envio, cuenta_transferencia, comprobante_pago, requiere_factura, numero_factura, numero_seguimiento, pago_en_destino) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *",
         [
           venta.id_cliente || null,
           venta.fecha || new Date(),
@@ -246,6 +247,7 @@ export async function crearVenta(
           venta.requiere_factura || false,
           venta.numero_factura || null,
           venta.numero_seguimiento || null,
+          venta.pago_en_destino || false,
         ],
       )
 
@@ -602,7 +604,7 @@ export async function contarVentasPendientes(): Promise<number> {
 
 // Agregar estas funciones al archivo
 
-// Actualizar la función actualizarVenta para incluir los nuevos campos
+// Actualizar la función actualizarVenta para incluir el nuevo campo
 export async function actualizarVenta(id: number, venta: Partial<Venta>): Promise<Venta | null> {
   try {
     const client = await import("./db").then((module) => module.getClient())
@@ -679,6 +681,12 @@ export async function actualizarVenta(id: number, venta: Partial<Venta>): Promis
       if (venta.numero_seguimiento !== undefined) {
         updateFields.push(`numero_seguimiento = $${paramIndex}`)
         updateValues.push(venta.numero_seguimiento)
+        paramIndex++
+      }
+
+      if (venta.pago_en_destino !== undefined) {
+        updateFields.push(`pago_en_destino = $${paramIndex}`)
+        updateValues.push(venta.pago_en_destino)
         paramIndex++
       }
 
@@ -862,7 +870,7 @@ export async function actualizarDetallesVenta(
       // Primero, eliminar la restricción de clave foránea si existe
       try {
         await client.query(`
-          ALTER TABLE DetalleVentas 
+          ALTER TABLE DetalleVentas
           DROP CONSTRAINT IF EXISTS detalleventas_id_producto_fkey
         `)
       } catch (error) {
@@ -1146,4 +1154,3 @@ export async function verificarStockVenta(
     throw error
   }
 }
-
