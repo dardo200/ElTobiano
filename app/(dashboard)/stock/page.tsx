@@ -14,6 +14,16 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Separator } from "@/components/ui/separator"
 import { Heading } from "@/components/ui/heading"
 import { Badge } from "@/components/ui/badge"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface Producto {
   id: number
@@ -36,6 +46,7 @@ export default function StockPage() {
   const [ultimoProducto, setUltimoProducto] = useState<Producto | null>(null)
   const [cargando, setCargando] = useState(false)
   const [totalModificados, setTotalModificados] = useState(0)
+  const [showConfirmation, setShowConfirmation] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Enfocar el input al cargar la página
@@ -76,7 +87,39 @@ export default function StockPage() {
     setCargando(true)
 
     try {
+      // Obtener el producto por código de barras
+      const response = await fetch(`/api/productos/codigo/${codigo}`)
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Producto no encontrado")
+      }
+
+      const producto = await response.json()
+      setUltimoProducto(producto)
+      setShowConfirmation(true)
+    } catch (error) {
+      console.error("Error:", error)
+      toast({
+        title: "Error",
+        description: error.message || "Error al obtener el producto",
+        variant: "destructive",
+      })
+    } finally {
+      setCargando(false)
+    }
+  }
+
+  const confirmUpdateStock = async () => {
+    if (!ultimoProducto) return
+
+    setCargando(true)
+    setShowConfirmation(false)
+
+    try {
       const cantidadFinal = operacion === "sumar" ? cantidad : -cantidad
+
+      console.log("Calling API to update stock:", { codigo, cantidad: cantidadFinal })
 
       const response = await fetch("/api/productos/stock", {
         method: "POST",
@@ -88,6 +131,7 @@ export default function StockPage() {
 
       if (!response.ok) {
         const error = await response.json()
+        console.error("API error:", error)
         throw new Error(error.error || "Error al actualizar el stock")
       }
 
@@ -115,8 +159,16 @@ export default function StockPage() {
         variant: "destructive",
       })
     } finally {
+      console.log("Finally block executed, setting cargando to false")
       setCargando(false)
+      setUltimoProducto(null)
     }
+  }
+
+  const cancelUpdateStock = () => {
+    setShowConfirmation(false)
+    setUltimoProducto(null)
+    setCargando(false)
   }
 
   return (
@@ -287,7 +339,34 @@ export default function StockPage() {
           </CardContent>
         </Card>
       </div>
+
+      <AlertDialog open={showConfirmation} onOpenChange={setShowConfirmation}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar actualización de stock</AlertDialogTitle>
+            <AlertDialogDescription>
+              {ultimoProducto ? (
+                <>
+                  Está a punto de {operacion === "sumar" ? "sumar" : "restar"} {cantidad} unidades al stock de{" "}
+                  <strong>{ultimoProducto.nombre}</strong>.
+                  <br />
+                  Stock actual: {ultimoProducto.stock}.
+                  <br />
+                  ¿Está seguro de que desea continuar?
+                </>
+              ) : (
+                "¿Está seguro de que desea continuar?"
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={cancelUpdateStock}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmUpdateStock} disabled={cargando}>
+              {cargando ? "Procesando..." : "Confirmar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
-
