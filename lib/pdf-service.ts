@@ -187,27 +187,8 @@ export const generarPresupuestoPDF = async (venta: Venta): Promise<Blob> => {
   // Condiciones
   doc.setFontSize(10)
   doc.setFont("helvetica", "normal")
-  doc.text("CONDICIONES:", 15, finalY + 20)
-  doc.text("- Este presupuesto tiene una validez de 15 días.", 15, finalY + 28)
   doc.text("- Los precios pueden variar sin previo aviso.", 15, finalY + 36)
-  doc.text("- La entrega se realizará una vez confirmado el pago.", 15, finalY + 44)
 
-  // Firma
-  try {
-    const firma = new Image()
-    firma.crossOrigin = "anonymous" // Evitar problemas CORS
-    firma.src = "/images/firma-empresa.png"
-    await new Promise((resolve, reject) => {
-      firma.onload = resolve
-      firma.onerror = reject
-      // Timeout para evitar esperar indefinidamente
-      setTimeout(resolve, 3000)
-    })
-    doc.addImage(firma, "PNG", 65, finalY + 55, 70, 20)
-  } catch (error) {
-    console.error("Error al cargar la firma:", error)
-    // Continuar sin la firma
-  }
 
   // Información de la empresa - Ajustada para evitar superposición
   doc.setFontSize(10)
