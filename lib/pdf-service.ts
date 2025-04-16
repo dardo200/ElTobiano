@@ -185,8 +185,8 @@ export const generarPresupuestoPDF = async (venta: Venta): Promise<Blob> => {
   doc.text(`TOTAL: $${venta.total.toFixed(2)}`, 195, finalY, { align: "right" })
 
   // Condiciones
-  doc.setFontSize(10)
-  doc.setFont("helvetica", "normal")
+  doc.setFontSize(12)
+  doc.setFont("helvetica", "bold")
   doc.text("- Los precios pueden variar sin previo aviso.", 15, finalY + 36)
 
 
