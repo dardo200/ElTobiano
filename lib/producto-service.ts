@@ -417,3 +417,25 @@ export async function verificarCodigoExiste(codigo: string): Promise<boolean> {
   }
 }
 
+export async function obtenerUltimoCodigoBarras(): Promise<string> {
+  try {
+    // Buscar códigos de barras numéricos de 4 dígitos
+    const result = await executeQuery(`
+      SELECT codigo 
+      FROM Productos 
+      WHERE codigo ~ '^[0-9]{4}$'
+      ORDER BY CAST(codigo AS INTEGER) DESC 
+      LIMIT 1
+    `)
+
+    if (result.rows.length === 0) {
+      // Si no hay códigos de 4 dígitos, empezar desde 1000
+      return "1000"
+    }
+
+    return result.rows[0].codigo
+  } catch (error) {
+    console.error("Error al obtener el último código de barras:", error)
+    throw error
+  }
+}

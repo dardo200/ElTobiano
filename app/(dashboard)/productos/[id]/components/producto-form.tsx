@@ -153,44 +153,37 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({ initialData }) => {
     }
   }
 
-  const generateRandomCode = () => {
-    // Generar un código aleatorio de 12 dígitos (formato EAN-13 sin el dígito de verificación)
-    return Math.floor(100000000000 + Math.random() * 900000000000).toString()
-  }
-
   const handleGenerateBarcode = async () => {
     setIsGeneratingCode(true)
     try {
-      // Verificar si ya existe un código generado
-      let newCode = generateRandomCode()
-
-      // Verificar que el código no exista ya en la base de datos
-      let isUnique = false
-      let attempts = 0
-      const maxAttempts = 5
-
-      while (!isUnique && attempts < maxAttempts) {
-        attempts++
-        const response = await fetch(`/api/productos/codigo/${newCode}/check`)
-        if (response.ok) {
-          const data = await response.json()
-          isUnique = !data.exists
-          if (!isUnique) {
-            newCode = generateRandomCode()
-          }
-        } else {
-          // Si hay un error en la verificación, asumimos que el código es único
-          isUnique = true
-        }
+      // Obtener el último código de barras de 4 dígitos
+      const response = await fetch("/api/productos/ultimo-codigo")
+      if (!response.ok) {
+        throw new Error("Error al obtener el último código de barras")
       }
 
-      if (!isUnique) {
-        toast.error("No se pudo generar un código único. Intente nuevamente.")
+      const data = await response.json()
+      const ultimoCodigo = data.ultimoCodigo
+
+      // Convertir a número e incrementar en 1
+      const ultimoCodigoNum = Number.parseInt(ultimoCodigo, 10)
+      const nuevoCodigo = (ultimoCodigoNum + 1).toString().padStart(4, "0")
+
+      // Verificar que el código no exista ya en la base de datos
+      const checkResponse = await fetch(`/api/productos/codigo/${nuevoCodigo}/check`)
+      if (!checkResponse.ok) {
+        throw new Error("Error al verificar el código")
+      }
+
+      const checkData = await checkResponse.json()
+      if (checkData.exists) {
+        toast.error(`El código ${nuevoCodigo} ya existe. Intente nuevamente.`)
         return
       }
 
-      form.setValue("codigo", newCode)
-      toast.success("Código de barras generado correctamente")
+      // Establecer el nuevo código
+      form.setValue("codigo", nuevoCodigo)
+      toast.success(`Código de barras ${nuevoCodigo} generado correctamente`)
     } catch (error) {
       console.error("Error al generar código de barras:", error)
       toast.error("Error al generar código de barras")
