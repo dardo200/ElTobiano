@@ -422,13 +422,13 @@ export const EditarVentaForm: React.FC<EditarVentaFormProps> = ({ venta, cliente
           id_venta: venta.id,
           id_producto: selectedCombo.id,
           cantidad: cantidad,
-          precio: selectedCombo.precio,
+          precio: selectedCombo.precio_venta,
           es_combo: true,
           es_mayorista: false,
           producto: {
             id: selectedCombo.id,
             nombre: selectedCombo.nombre,
-            precio: selectedCombo.precio,
+            precio: selectedCombo.precio_venta,
             codigo: selectedCombo.codigo,
           },
         },
@@ -802,7 +802,7 @@ export const EditarVentaForm: React.FC<EditarVentaFormProps> = ({ venta, cliente
                     <p className="font-medium">{combo.nombre}</p>
                     <div className="flex justify-between text-sm text-muted-foreground">
                       <span>Código: {combo.codigo || "N/A"}</span>
-                      <span>Precio: ${combo.precio.toFixed(2)}</span>
+                      <span>Precio: ${combo.precio_venta.toFixed(2)}</span>
                     </div>
                   </div>
                 ))
@@ -815,7 +815,7 @@ export const EditarVentaForm: React.FC<EditarVentaFormProps> = ({ venta, cliente
                   <div className="flex justify-between items-center">
                     <div>
                       <p className="font-medium">{selectedCombo.nombre}</p>
-                      <p className="text-sm text-muted-foreground">Precio: ${selectedCombo.precio.toFixed(2)}</p>
+                      <p className="text-sm text-muted-foreground">Precio: ${selectedCombo.precio_venta.toFixed(2)}</p>
                     </div>
                     <div className="flex items-center space-x-2">
                       <Button
