@@ -1,5 +1,13 @@
 import type { Venta } from "@/types"
 
+// Función auxiliar para formatear números con puntos de miles y sin centavos
+const formatearNumero = (numero: number): string => {
+  return new Intl.NumberFormat("es-AR", {
+    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
+  }).format(numero)
+}
+
 // Esta función se ejecutará en el cliente, por lo que importamos jspdf dinámicamente
 export const generarPresupuestoPDF = async (venta: Venta): Promise<Blob> => {
   // Importar dinámicamente jspdf y jspdf-autotable
@@ -13,7 +21,7 @@ export const generarPresupuestoPDF = async (venta: Venta): Promise<Blob> => {
     format: "a4",
   })
 
-  // Añadir logo
+  // Añadir logo con tamaño aumentado
   try {
     const img = new Image()
     img.crossOrigin = "anonymous" // Evitar problemas CORS
@@ -24,42 +32,43 @@ export const generarPresupuestoPDF = async (venta: Venta): Promise<Blob> => {
       // Timeout para evitar esperar indefinidamente
       setTimeout(resolve, 3000)
     })
-    doc.addImage(img, "PNG", 15, 10, 30, 30)
+    // Aumentar el tamaño del logo (antes era 30x30)
+    doc.addImage(img, "PNG", 15, 10, 40, 40)
   } catch (error) {
     console.error("Error al cargar el logo:", error)
     // Continuar sin el logo
   }
 
-  // Título y fecha - Ajustado para evitar superposición
+  // Título y fecha - Ajustado para evitar superposición con el logo más grande
   doc.setFontSize(22)
   doc.setFont("helvetica", "bold")
-  doc.text("PRESUPUESTO", 105, 25, { align: "center" })
+  doc.text("PRESUPUESTO", 105, 30, { align: "center" })
 
   doc.setFontSize(12)
   doc.setFont("helvetica", "normal")
-  doc.text(`Nº: ${venta.id}`, 105, 35, { align: "center" })
-  doc.text(`Fecha: ${new Date(venta.fecha).toLocaleDateString()}`, 105, 42, { align: "center" })
+  doc.text(`Nº: ${venta.id}`, 105, 40, { align: "center" })
+  doc.text(`Fecha: ${new Date(venta.fecha).toLocaleDateString()}`, 105, 47, { align: "center" })
 
   // Información del cliente
   doc.setFontSize(12)
   doc.setFont("helvetica", "bold")
-  doc.text("CLIENTE:", 15, 55)
+  doc.text("CLIENTE:", 15, 60)
 
   doc.setFont("helvetica", "normal")
   if (venta.cliente) {
-    doc.text(`Nombre: ${venta.cliente.nombre}`, 15, 62)
-    if (venta.cliente.dni) doc.text(`DNI/CUIT: ${venta.cliente.dni}`, 15, 69)
-    if (venta.cliente.email) doc.text(`Email: ${venta.cliente.email}`, 15, 76)
-    if (venta.cliente.telefono) doc.text(`Teléfono: ${venta.cliente.telefono}`, 15, 83)
-    if (venta.cliente.direccion) doc.text(`Dirección: ${venta.cliente.direccion}`, 15, 90)
+    doc.text(`Nombre: ${venta.cliente.nombre}`, 15, 67)
+    if (venta.cliente.dni) doc.text(`DNI/CUIT: ${venta.cliente.dni}`, 15, 74)
+    if (venta.cliente.email) doc.text(`Email: ${venta.cliente.email}`, 15, 81)
+    if (venta.cliente.telefono) doc.text(`Teléfono: ${venta.cliente.telefono}`, 15, 88)
+    if (venta.cliente.direccion) doc.text(`Dirección: ${venta.cliente.direccion}`, 15, 95)
   } else {
-    doc.text("Cliente no registrado", 15, 62)
+    doc.text("Cliente no registrado", 15, 67)
   }
 
   // Tabla de productos
   doc.setFontSize(12)
   doc.setFont("helvetica", "bold")
-  doc.text("DETALLE DE PRODUCTOS:", 15, 105)
+  doc.text("DETALLE DE PRODUCTOS:", 15, 110)
 
   const tableColumn = ["Producto", "Cantidad", "Precio Unit.", "Subtotal"]
   const tableRows: any[] = []
@@ -81,7 +90,13 @@ export const generarPresupuestoPDF = async (venta: Venta): Promise<Blob> => {
         productoNombre = detalle.es_combo ? `[Combo] #${detalle.id_producto}` : `Producto #${detalle.id_producto}`
       }
 
-      tableRows.push([productoNombre, cantidad.toString(), `$${precio.toFixed(2)}`, `$${subtotal.toFixed(2)}`])
+      // Formatear los números con puntos de miles y sin centavos
+      tableRows.push([
+        productoNombre,
+        cantidad.toString(),
+        `${formatearNumero(precio)}`,
+        `${formatearNumero(subtotal)}`,
+      ])
 
       // Si es un combo, agregar los productos que lo componen
       if (detalle.es_combo) {
@@ -144,12 +159,12 @@ export const generarPresupuestoPDF = async (venta: Venta): Promise<Blob> => {
     tableRows.push(["No hay productos en esta venta", "", "", ""])
   }
 
-  // Añadir la tabla al documento
+  // Añadir la tabla al documento con líneas divisorias
   autoTable(doc, {
     head: [tableColumn],
     body: tableRows,
-    startY: 110,
-    theme: "striped",
+    startY: 115,
+    theme: "grid", // Cambiado de "striped" a "grid" para mostrar todas las líneas divisorias
     headStyles: {
       fillColor: [240, 196, 74], // Color dorado similar al logo
       textColor: [0, 0, 0],
@@ -179,10 +194,10 @@ export const generarPresupuestoPDF = async (venta: Venta): Promise<Blob> => {
   // Calcular la posición Y después de la tabla
   const finalY = (doc as any).lastAutoTable.finalY + 10
 
-  // Total
+  // Total (formateado con puntos de miles y sin centavos)
   doc.setFontSize(12)
   doc.setFont("helvetica", "bold")
-  doc.text(`TOTAL: $${venta.total.toFixed(2)}`, 195, finalY, { align: "right" })
+  doc.text(`TOTAL: ${formatearNumero(venta.total)}`, 195, finalY, { align: "right" })
 
   // Condiciones
   doc.setFontSize(12)

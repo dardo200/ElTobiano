@@ -381,14 +381,14 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({ initialData }) => {
                   <FormLabel>Código de Barras *</FormLabel>
                   <div className="flex gap-2">
                     <FormControl>
-                      <Input disabled={isLoading || initialData !== null} placeholder="Código de barras" {...field} />
+                      <Input disabled={isLoading} placeholder="Código de barras" {...field} />
                     </FormControl>
                     <Button
                       type="button"
                       variant="outline"
                       size="icon"
                       onClick={handleScanBarcode}
-                      disabled={isLoading || initialData !== null}
+                      disabled={isLoading}
                     >
                       <Barcode className="h-4 w-4" />
                     </Button>
@@ -397,7 +397,7 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({ initialData }) => {
                       variant="outline"
                       size="icon"
                       onClick={handleGenerateBarcode}
-                      disabled={isLoading || initialData !== null || isGeneratingCode}
+                      disabled={isLoading || isGeneratingCode}
                     >
                       {isGeneratingCode ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -547,4 +547,3 @@ export const ProductoForm: React.FC<ProductoFormProps> = ({ initialData }) => {
     </>
   )
 }
-
