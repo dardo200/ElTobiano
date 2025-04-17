@@ -9,8 +9,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/componen
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "@/components/ui/use-toast"
-import { ArrowLeft, Check, Loader2, Barcode, ChevronDown, ChevronUp } from "lucide-react"
+import { ArrowLeft, Check, Loader2, Barcode, ChevronDown, ChevronUp, Tag } from "lucide-react"
 import type { Venta } from "@/types"
+import { generarEtiquetaEnvio } from "@/lib/etiqueta-service"
+import type { Cliente } from "@/types"
 
 interface ProductoCombo {
   id: number
@@ -40,6 +42,22 @@ export default function DespacharVentaPage() {
   const [codigoInput, setCodigoInput] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [generandoEtiqueta, setGenerandoEtiqueta] = useState(false)
+  const [clienteCompleto, setClienteCompleto] = useState<Cliente | null>(null)
+
+  const fetchClienteCompleto = async (clienteId: number) => {
+    try {
+      const response = await fetch(`/api/clientes/${clienteId}`)
+      if (response.ok) {
+        const data = await response.json()
+        setClienteCompleto(data)
+      } else {
+        console.error("Error al obtener los datos completos del cliente")
+      }
+    } catch (error) {
+      console.error("Error al obtener los datos completos del cliente:", error)
+    }
+  }
 
   useEffect(() => {
     const fetchVenta = async () => {
@@ -48,6 +66,10 @@ export default function DespacharVentaPage() {
         if (response.ok) {
           const data = await response.json()
           setVenta(data)
+
+          if (data.cliente && data.cliente.id) {
+            await fetchClienteCompleto(data.cliente.id)
+          }
 
           // Preparar lista de productos para verificación
           if (data.detalles && data.detalles.length > 0) {
@@ -356,17 +378,12 @@ export default function DespacharVentaPage() {
         const data = await response.json()
         if (data.error && data.error.includes("Stock insuficiente")) {
           // Mostrar un mensaje de error más detallado
-          toast({
-            variant: "destructive",
-            title: "Error de stock",
-            description: (
-              <div className="mt-2 max-h-[200px] overflow-y-auto">
-                <p className="font-semibold mb-2">Productos con stock insuficiente:</p>
-                <pre className="text-xs whitespace-pre-wrap">{data.error}</pre>
-              </div>
-            ),
-            duration: 10000, // Mostrar por más tiempo
-          })
+          toast.error(
+            <div className="mt-2 max-h-[200px] overflow-y-auto">
+              <p className="font-semibold mb-2">Productos con stock insuficiente:</p>
+              <pre className="text-xs whitespace-pre-wrap">{data.error}</pre>
+            </div>,
+          )
         } else {
           toast.error("Error al despachar la venta")
         }
@@ -376,6 +393,24 @@ export default function DespacharVentaPage() {
       toast.error("Error al despachar la venta")
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const handleGenerarEtiqueta = async () => {
+    if (!venta || !clienteCompleto) {
+      toast.error("No se puede generar la etiqueta sin datos del cliente")
+      return
+    }
+
+    try {
+      setGenerandoEtiqueta(true)
+      await generarEtiquetaEnvio(venta, clienteCompleto)
+      toast.success("La etiqueta de envío se ha generado correctamente")
+    } catch (error) {
+      console.error("Error al generar la etiqueta:", error)
+      toast.error(error instanceof Error ? error.message : "No se pudo generar la etiqueta de envío")
+    } finally {
+      setGenerandoEtiqueta(false)
     }
   }
 
@@ -605,14 +640,29 @@ export default function DespacharVentaPage() {
               </div>
             </CardContent>
             <CardFooter>
-              <Button
-                className="w-full"
-                disabled={!productos.every((p) => p.verificado) || isSubmitting}
-                onClick={handleConfirmarDespacho}
-              >
-                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Confirmar Despacho
-              </Button>
+              <div className="w-full space-y-2">
+                <Button
+                  className="w-full"
+                  variant="outline"
+                  onClick={handleGenerarEtiqueta}
+                  disabled={generandoEtiqueta || !clienteCompleto}
+                >
+                  {generandoEtiqueta ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Tag className="mr-2 h-4 w-4" />
+                  )}
+                  {generandoEtiqueta ? "Generando..." : "Generar Etiqueta"}
+                </Button>
+                <Button
+                  className="w-full"
+                  disabled={!productos.every((p) => p.verificado) || isSubmitting}
+                  onClick={handleConfirmarDespacho}
+                >
+                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Confirmar Despacho
+                </Button>
+              </div>
             </CardFooter>
           </Card>
         </div>
@@ -620,4 +670,3 @@ export default function DespacharVentaPage() {
     </>
   )
 }
-
