@@ -118,18 +118,6 @@ export default function DetalleVentaPage() {
 
       etiquetaDiv.appendChild(titulo)
 
-      // Datos de la empresa (remitente)
-      const datosEmpresa = document.createElement("div")
-      datosEmpresa.style.marginBottom = "20px"
-      datosEmpresa.innerHTML = `
-        <h2 style="font-size: 16px; margin-bottom: 5px; border-bottom: 1px solid #ccc; padding-bottom: 5px;">REMITENTE:</h2>
-        <p style="margin: 2px 0; font-size: 14px;"><strong>Empresa:</strong> El Tobiano Talabarteria</p>
-        <p style="margin: 2px 0; font-size: 14px;"><strong>Ciudad:</strong> Río Cuarto, Córdoba</p>
-        <p style="margin: 2px 0; font-size: 14px;"><strong>CP:</strong> 5800</p>
-        <p style="margin: 2px 0; font-size: 14px;"><strong>Teléfono:</strong> +54 9 (358) 600-9786</p>
-      `
-      etiquetaDiv.appendChild(datosEmpresa)
-
       // Datos del cliente (destinatario)
       const datosCliente = document.createElement("div")
       datosCliente.style.marginBottom = "20px"
@@ -141,47 +129,46 @@ export default function DetalleVentaPage() {
         direccion: clienteCompleto.direccion,
         ciudad: clienteCompleto.ciudad,
         provincia: clienteCompleto.provincia,
-        cp: clienteCompleto.codigo_postal || clienteCompleto.cp,
+        cp: clienteCompleto.cp,
         telefono: clienteCompleto.telefono,
         email: clienteCompleto.email,
       })
 
       datosCliente.innerHTML = `
-        <h2 style="font-size: 16px; margin-bottom: 5px; border-bottom: 1px solid #ccc; padding-bottom: 5px;">DESTINATARIO:</h2>
+        <h2 style="font-size: 18px; margin-bottom: 5px; border-bottom: 1px solid #ccc; padding-bottom: 5px;">DESTINATARIO:</h2>
         <p style="margin: 2px 0; font-size: 14px;"><strong>Nombre:</strong> ${clienteCompleto.nombre}</p>
-        <p style="margin: 2px 0; font-size: 14px;"><strong>DNI:</strong> ${clienteCompleto.dni || "No especificado"}</p>
-        <p style="margin: 2px 0; font-size: 14px;"><strong>Dirección:</strong> ${clienteCompleto.direccion || "No especificada"}</p>
-        <p style="margin: 2px 0; font-size: 14px;"><strong>Ciudad:</strong> ${clienteCompleto.ciudad || "No especificada"}</p>
-        <p style="margin: 2px 0; font-size: 14px;"><strong>Provincia:</strong> ${clienteCompleto.provincia || "No especificada"}</p>
-        <p style="margin: 2px 0; font-size: 14px;"><strong>CP:</strong> ${clienteCompleto.codigo_postal || clienteCompleto.cp || "No especificado"}</p>
-        <p style="margin: 2px 0; font-size: 14px;"><strong>Teléfono:</strong> ${clienteCompleto.telefono || "No especificado"}</p>
-        <p style="margin: 2px 0; font-size: 14px;"><strong>Email:</strong> ${clienteCompleto.email || "No especificado"}</p>
+        <p style="margin: 2px 0; font-size: 14px;"><strong>DNI:</strong> ${clienteCompleto.dni || " "}</p>
+        <p style="margin: 2px 0; font-size: 14px;"><strong>Dirección:</strong> ${clienteCompleto.direccion || " "}</p>
+        <p style="margin: 2px 0; font-size: 14px;"><strong>Ciudad:</strong> ${clienteCompleto.ciudad || " "}</p>
+        <p style="margin: 2px 0; font-size: 14px;"><strong>Provincia:</strong> ${clienteCompleto.provincia || " "}</p>
+        <p style="margin: 2px 0; font-size: 14px;"><strong>CP:</strong> ${clienteCompleto.cp || " "}</p>
+        <p style="margin: 2px 0; font-size: 14px;"><strong>Teléfono:</strong> ${clienteCompleto.telefono || " "}</p>
+        <p style="margin: 2px 0; font-size: 14px;"><strong>Email:</strong> ${clienteCompleto.email || " "}</p>
       `
       etiquetaDiv.appendChild(datosCliente)
+
+      // Datos de la empresa (remitente)
+      const datosEmpresa = document.createElement("div")
+      datosEmpresa.style.marginBottom = "20px"
+      datosEmpresa.innerHTML = `
+        <h2 style="font-size: 18px; margin-bottom: 5px; border-bottom: 1px solid #ccc; padding-bottom: 5px;">REMITENTE:</h2>
+        <p style="margin: 2px 0; font-size: 14px;"><strong>Empresa:</strong> El Tobiano Talabarteria</p>
+        <p style="margin: 2px 0; font-size: 14px;"><strong>Ciudad:</strong> Río Cuarto, Córdoba</p>
+        <p style="margin: 2px 0; font-size: 14px;"><strong>CP:</strong> 5800</p>
+        <p style="margin: 2px 0; font-size: 14px;"><strong>Teléfono:</strong> +54 9 (358) 600-9786</p>
+      `
+      etiquetaDiv.appendChild(datosEmpresa)
 
       // Datos del envío
       const datosEnvio = document.createElement("div")
       datosEnvio.style.marginBottom = "20px"
       datosEnvio.innerHTML = `
         <h2 style="font-size: 16px; margin-bottom: 5px; border-bottom: 1px solid #ccc; padding-bottom: 5px;">DATOS DEL ENVÍO:</h2>
-        <p style="margin: 2px 0; font-size: 14px;"><strong>Servicio de correo:</strong> ${venta.correo_usado || "No especificado"}</p>
+        <p style="margin: 2px 0; font-size: 14px;"><strong>Servicio de correo:</strong> ${venta.correo_usado || " "}</p>
         <p style="margin: 2px 0; font-size: 14px;"><strong>Fecha:</strong> ${new Date(venta.fecha).toLocaleDateString()}</p>
         ${venta.numero_seguimiento ? `<p style="margin: 2px 0; font-size: 14px;"><strong>Número de seguimiento:</strong> ${venta.numero_seguimiento}</p>` : ""}
       `
       etiquetaDiv.appendChild(datosEnvio)
-
-      // Información adicional
-      const infoAdicional = document.createElement("div")
-      infoAdicional.style.marginTop = "20px"
-      infoAdicional.style.padding = "10px"
-      infoAdicional.style.backgroundColor = "#f5f5f5"
-      infoAdicional.style.borderRadius = "4px"
-      infoAdicional.style.textAlign = "center"
-      infoAdicional.innerHTML = `
-        <p style="margin: 2px 0; font-size: 12px;">CONTENIDO: Productos varios - Manipular con cuidado</p>
-        <p style="margin: 2px 0; font-size: 12px; font-weight: bold;">- ESTE LADO HACIA ARRIBA -</p>
-      `
-      etiquetaDiv.appendChild(infoAdicional)
 
       // Crear una ventana emergente para imprimir
       const ventanaImpresion = window.open("", "_blank")
